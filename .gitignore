@@ -1,0 +1,14 @@
+__pycache__/
+
+/map_opt
+/old
+/output
+/python-sdk/mapmodex/utils/temp_code
+/python-sdk/tests
+/python-sdk/categries_statistics.py
+/python-sdk/histogram.py
+/python-sdk/width_statistics.py
+# /python-sdk/*.py
+
+*.pkl
+*.pyc
