@@ -455,7 +455,9 @@ def get_geom_in_patch(map_explorer, geoms, patch_box=[0, 0, 60, 30], patch_angle
 def interpolate(instance, inter_args=0):
     if not inter_args:
         inter_args = math.floor(instance.length)
-
+        if not inter_args:
+            return instance
+    
     distance = np.linspace(0, instance.length, inter_args)
     instance_coord = [np.array(instance.interpolate(n).coords)[
         0] for n in distance]
@@ -709,42 +711,92 @@ def np_to_geom(map_ins_dict):
     for vec_class in layers:
         if len(map_ins_dict[vec_class]):
             for instance in map_ins_dict[vec_class]:
-                instance = LineString([[x[0], x[1]] for x in instance])
+                try:
+                    instance = LineString([[x[0], x[1]] for x in instance])
+                except:
+                    continue
                 map_dict[vec_class].append(instance)
 
     return map_dict
 
+def multi_2_single(geom):
+    if geom.type == 'MultiLineString':
+        geom = ops.linemerge(geom)
+    elif geom.type == 'MultiPolygon':
+        geom = ops.unary_union(geom)
+        
+    return geom
 
-def geom_to_np(map_ins_dict, inter_args=0, int_back=False, info=None, map_version=None, save=None):
+def interpolate_geom(geom, inter, inter_acc):
+    if geom.geom_type == 'Polygon':
+        instance = geom.exterior
+    elif geom.geom_type == 'LineString':
+        instance = geom
+    else:
+        return None
+        
+    if inter:
+        instance = interpolate(instance, inter_acc)
+    
+    return instance        
+
+def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=None, map_version=None, save=None):
+    """_summary_
+
+    Args:
+        map_ins_dict (dict): _description_
+        inter_args (int/dict, optional): Interpolation accuracy. If int_back=true, it is a dict containing the accuracy of the original vector. Defaults to 0.
+        int_back (bool, optional): Interpolate the geometry(converted from a vector) back to the accuracy of the original vector. Defaults to False.
+        info (dict, optional): _description_. Defaults to None.
+        map_version (_type_, optional): _description_. Defaults to None.
+        save (_type_, optional): _description_. Defaults to None.
+
+    Returns:
+        _type_: _description_
+    """
     map_dict = {}
-
     for vec_class in map_ins_dict.keys():
         map_dict[vec_class] = []
+        
         if len(map_ins_dict[vec_class]):
             for ind, instance in enumerate(map_ins_dict[vec_class]):
                 if not instance.is_empty:
-                    if instance.geom_type in ['LineString', 'MultiLineString']:
-                        if not int_back:
-                            if inter_args:
-                                instance = interpolate(
-                                    instance, inter_args)
+                    # aget the interpolation accuracy 
+                    if int_back:
+                        shape = inter_args[vec_class][ind].shape
+                        inter_acc = shape[0]
+                    else:
+                        inter_acc = inter_args
+                    
+                    # managing the multi-geometries
+                    if instance.geom_type in ['MultiPolygon', 'MultiLineString']:
+                        instance = multi_2_single(instance)
+                        
+                        if instance.geom_type in ['MultiPolygon', 'MultiLineString']:
+                            inter_gs = []
+                            for g in instance.geoms:
+                                g = interpolate_geom(g, inter, inter_acc)
+                                if g:
+                                    inter_gs.append(np.array(g.coords))
+                            if inter_gs:
+                                instance = np.concatenate(inter_gs)
                             else:
-                                if instance.geom_type == 'MultiLineString':
-                                    instance = ops.linemerge(instance)
-
-                                if instance.geom_type == 'MultiLineString':
-                                    line_list = []
-                                    for ist in instance.geoms:
-                                        line_list.append(
-                                            np.array(ist.coords))
-                                    instance = np.concatenate(line_list)
-                                    continue
+                                continue
                         else:
-                            shape = inter_args[vec_class][ind].shape
-                            instance = interpolate(instance, shape[0])
-
-                        map_dict[vec_class].append(
-                            np.array(instance.coords))
+                            instance = interpolate_geom(instance, inter, inter_acc)
+                            instance = np.array(instance.coords)
+                    
+                    elif instance.geom_type in ['Polygon', 'LineString']:
+                        instance = interpolate_geom(instance, inter, inter_acc)
+                        instance = np.array(instance.coords)
+                    
+                    else:
+                        instance = np.array(instance.coords)
+                    
+                    if isinstance(instance, np.ndarray) and instance.size != 0:    
+                        map_dict[vec_class].append(instance)
+                    else:
+                        continue
 
     if save is not None:
         save_path = os.path.join(
@@ -756,6 +808,13 @@ def geom_to_np(map_ins_dict, inter_args=0, int_back=False, info=None, map_versio
             # np.save(outfile, map_dict)
 
     return map_dict
+
+def affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact):
+    new_lane = affinity.translate(new_lane, xoff, yoff) #shift
+    new_lane = affinity.rotate(new_lane, angle, origin) #rotate
+    new_lane = affinity.scale(new_lane, xfact, yfact, origin=origin) #flip
+    
+    return new_lane
 
 def move_polygons(line, polygons_dic, distance, except_token = []):
     for key, polygon in polygons_dic.items():
@@ -811,8 +870,8 @@ class NuScenesMap4MME(NuScenesMap):
                  dataroot: str = '/data/sets/nuscenes',
                  map_name: str = 'singapore-onenorth'):
         
-        super(NuScenesMap4MME, self).__init__(dataroot, map_name)
-        
+        # super(NuScenesMap4MME, self).__init__(dataroot, map_name)
+        super().__init__(dataroot, map_name)
         self.non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light', 'centerline']
         
         self.boundary = self._load_layer('boundary')

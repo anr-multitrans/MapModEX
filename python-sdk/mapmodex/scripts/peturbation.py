@@ -209,39 +209,42 @@ class MapTransform:
         if times == 0:
             times = 1
 
-        new_deviders = []
-        new_centerlines = []
         for _ in range(times):
-            centerline = centerlines[random.choice([k for k in centerlines.keys()])]['geom']
-            if centerline.geom_type == 'MultiLineString':
-                continue
+            centerline_dic = centerlines[random.choice([k for k in centerlines.keys()])]
+            
             # affinity tranform
-            centerline = affinity.translate(centerline, random.choice(
-                [-3.5, 3.5]), random.choice([-3.5, 3.5])) #shift
-            centerline = affinity.rotate(centerline, random.randint(-180, 180)) #rotate
-            centerline = affinity.scale(centerline, random.choice([-1, 1]), random.choice([-1, 1])) #flip
-            centerlien_dic = layer_dict_generator(centerline, source='centerline')
+            xoff = random.choice([-3.5, 3.5])
+            yoff = random.choice([-3.5, 3.5])
+            angle = random.randint(-180, 180)
+            origin = (0,0)
+            xfact = random.choice([-1, 1])
+            yfact = random.choice([-1, 1])
+            
+            new_lane = centerline_dic['geom']
+            new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact)
+            centerlien_dic = layer_dict_generator(new_lane, source='new')
             map_geom_dict['centerline'][centerlien_dic['token']] = centerlien_dic
             
-            center_lane = centerline.buffer(1.75) #TODO use original lanes
-            if center_lane.geom_type == 'MultiPolygon':
-                continue
-            lane_dic = layer_dict_generator(center_lane, source='new')
-            map_geom_dict['lane'][lane_dic['token']] = lane_dic
-
-            # for divider in map_geom_dict['divider']:
-            #     if not divider.is_empty:
-            #         divider = interpolate(divider)
-            #         new_deviders += keep_non_intersecting_parts(
-            #             divider, center_lane)
-
-            # new_centerlines.append(centerline)
+            center_lane = new_lane.buffer(1.8) #TODO use original lanes
+            new_lane_dic = layer_dict_generator(center_lane, source='centerline')
+            map_geom_dict['lane'][new_lane_dic['token']] = new_lane_dic
             
-            # map_geom_dict['divider'] = new_deviders
-
-        # map_geom_dict['centerline'] += new_centerlines
-
-        # map_geom_dict['centerline'] = union_line(map_geom_dict['centerline'])
+            if 'lane_token' in centerline_dic:
+                for lane_token in centerline_dic['lane_token']:
+                    lane_dic = map_geom_dict['lane'][lane_token]
+                    if lane_dic['from'] != 'lane_connector':
+                        new_lane = lane_dic['geom']
+                        new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact)
+                        new_lane_dic = layer_dict_generator(new_lane, source='new')
+                        map_geom_dict['lane'][new_lane_dic['token']] = new_lane_dic
+                    
+            if 'ped_crossing_token' in centerline_dic:
+                for lane_token in centerline_dic['ped_crossing_token']:
+                    lane_dic = map_geom_dict['ped_crossing'][lane_token]
+                    new_lane = lane_dic['geom']
+                    new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact)
+                    new_lane_dic = layer_dict_generator(new_lane, source='new')
+                    map_geom_dict['ped_crossing'][new_lane_dic['token']] = new_lane_dic
 
         return map_geom_dict
 

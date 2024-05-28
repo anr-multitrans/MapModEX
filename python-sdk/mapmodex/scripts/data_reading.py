@@ -129,16 +129,17 @@ class VectorizedLocalMap(object):
                 #     map_geom_org_dic[vec_class])
                 for v in map_geom_org_dic[vec_class].values():
                     map_ins_org_dict[vec_class].append(v['geom'])
-            elif vec_class == 'ped_crossing':
-                map_ins_org_dict[vec_class] = self.ped_poly_geoms_to_instances(
-                    map_geom_org_dic[vec_class]) # merge overlaped or connected ped_crossing to one
             elif vec_class == 'boundary':
-                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(
-                    map_geom_org_dic)   # merge boundary and lanes
+                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(map_geom_org_dic)   # merge boundary and lanes
             elif vec_class == 'divider':
                 map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_org_dic) # take from 'divier' and 'lane', merge overlaped and delete duplicated
+            elif vec_class == 'ped_crossing':
+                continue
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
+
+        if 'ped_crossing' in map_geom_org_dic:
+            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_org_dic['ped_crossing'], map_ins_org_dict['boundary']) # merge overlaped or connected ped_crossing to one
 
         if 'divider' in map_ins_org_dict.keys():
             new_dividers = []
@@ -449,25 +450,6 @@ class VectorizedLocalMap(object):
         ls_dict['centerline'] = line_list_dic
 
         return ls_dict
-
-    def _get_lane_divider(self, lane_dicts):
-        for lane_dic in lane_dicts.values():
-            if lane_dic['from'] == 'lane':
-                lane_record = lane_dic['record']
-                for direction in ['left', 'right']:
-                    divider_name = direction + '_lane_divider_segments'
-                    if len(lane_record[divider_name]):
-                        lane_segments = list(set([seg['node_token'] for seg in lane_record[divider_name]]))
-                        node_records = getattr(self.map_explorer.map_api, 'node')
-                        nodes = []
-                        for rec in node_records:
-                            if rec['token'] in lane_segments:
-                                nodes.append([rec['x'], rec['y']])
-                        divider = LineString(nodes)
-                        divider = to_patch_coord(divider, self.patch_angle, self.patch_box[0], self.patch_box[1])
-                        lane_dic[direction + '_lane_divider'] = divider
-        
-        return lane_dicts
         
     def _get_centerline(self, lane_dict) -> dict:
         centerline_dict = {}
@@ -539,11 +521,11 @@ class VectorizedLocalMap(object):
             if not new_line.is_empty:
                 line = to_patch_coord(line, patch_angle, patch_x, patch_y)
                 line_dic = {}
-                line_dic['token'] = record['token']
+                line_dic.update(record)
                 line_dic['geom'] = line
-                line_dic['from'] = layer_name
-                line_dic['record'] = record
-                line_list_dic[record['token']] = line_dic
+                if 'from' not in record:
+                    line_dic['from'] = layer_name
+                line_list_dic[line_dic['token']] = line_dic
 
                 if self.delete:
                     self.delete_record.delete_layer_record(
@@ -574,11 +556,11 @@ class VectorizedLocalMap(object):
                 if polygon.geom_type == 'Polygon':
                     polygon = MultiPolygon([polygon])
                 polygon_dic = {}
-                polygon_dic['token'] = record['token']
+                polygon_dic.update(record)
                 polygon_dic['geom'] = polygon
-                polygon_dic['from'] = layer_name
-                polygon_dic['record'] = record
-                polygon_list_dic[record['token']] = polygon_dic
+                if 'from' not in record:
+                    polygon_dic['from'] = layer_name
+                polygon_list_dic[polygon_dic['token']] = polygon_dic
 
                 if self.delete:
                     self.delete_record.delete_layer_record(
@@ -644,53 +626,33 @@ class VectorizedLocalMap(object):
         return polygon_list, record_list
 
     def line_geoms_to_instances(self, geom_dict):
-        line_geom_list = []
+        line_geom_list = {}
 
         if 'divider' in geom_dict.keys():
-            for divider_dic in geom_dict['divider'].values():
-                line_geom_list.append(divider_dic['geom'])
+            for k, divider_dic in geom_dict['divider'].items():
+                if divider_dic['from'] == 'road_divider':
+                    # line_geom_list.update(divider_dic)
+                    line_geom_list[k] = divider_dic
             
         if 'lane' in geom_dict.keys():
-            for divider_dic in geom_dict['lane'].values():
-                for divider_name in ['left_lane_divider', 'right_lane_divider']:
-                    if divider_name in divider_dic.keys():
-                        line = divider_dic[divider_name]
-                        if not line.is_empty:
-                            if line.geom_type == 'MultiLineString':
-                                for single_line in line.geoms:
-                                    # line_instances.append(single_line)
-                                    common_result = check_divider_common(single_line, line_geom_list)
-                                    if common_result:
-                                        line_geom_list = common_result[1]
-                                        line_geom_list.append(common_result[0])
-                                    else:
-                                        line_geom_list.append(single_line)
-                            elif line.geom_type == 'LineString':
-                                # line_instances.append(line)
-                                common_result = check_divider_common(line, line_geom_list)
-                                if common_result:
-                                    line_geom_list = common_result[1]
-                                    line_geom_list.append(common_result[0])
-                                else:
-                                    line_geom_list.append(line)
-                            else:
-                                # raise NotImplementedError
-                                continue
-                        # line_geom = check_divider_common(divider_dic[divider_name], line_geom)
-                        # line_geom.append(divider_dic[divider_name])
+            for lane_dic in geom_dict['lane'].values():
+                if lane_dic['from'] == 'lane': 
+                    for div_name in ['left_lane_divider_token', 'right_lane_divider_token']:
+                        if div_name in lane_dic:
+                            if lane_dic[div_name] in geom_dict['divider']:
+                                line_geom_list[lane_dic[div_name]] = geom_dict['divider'][lane_dic[div_name]]
 
-        new_lans = [lane_dic['geom'] for lane_dic in geom_dict['lane'].values() if lane_dic['from'] in ['new']]
-        line_instances = []
-        for divider in line_geom_list:
-            if not divider.is_empty:
-                for lane in new_lans:
-                    divider = interpolate(divider)
-                    line_instances += keep_non_intersecting_parts(divider, lane, True)
-                    break
-                    
-                line_instances.append(divider)
+        line_instances = [divider['geom'] for divider in line_geom_list.values()]
+        new_lans = [lane_dic['geom'] for lane_dic in geom_dict['lane'].values() if lane_dic['from'] in ['centerline']]
         
-        # line_instances = self._one_type_line_geom_to_instances(line_geom)
+        if line_instances and new_lans:
+            for lane in new_lans:
+                line_instances_temp = []
+                for divider in line_instances:
+                    if not divider.is_empty:
+                        int_divider = interpolate(divider)
+                        line_instances_temp += keep_non_intersecting_parts(int_divider, lane, True)
+                line_instances = copy.deepcopy(line_instances_temp)
 
         return line_instances
 
@@ -708,12 +670,18 @@ class VectorizedLocalMap(object):
                     raise NotImplementedError
         return line_instances
 
-    def ped_poly_geoms_to_instances(self, ped_geom):
+    def ped_poly_geoms_to_instances(self, ped_geom, boundary=[]):
         ped = []
 
         for ped_dic in ped_geom.values():
             if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
-                ped.append(ped_dic['geom'])
+                if ped_dic['from'] == 'new':
+                    for b in boundary:
+                        if b.intersection(ped_dic['geom']):
+                            ped.append(ped_dic['geom'])
+                            break
+                else:
+                    ped.append(ped_dic['geom'])
 
         union_segments = ops.unary_union(ped)
         max_x = self.patch_box[3] / 2
@@ -870,7 +838,7 @@ def perturb_map_seq(vector_map, trans_args, info, map_version, visual, trans_dic
 
     if trans_args.int_num and trans_args.int_ord == 'before':
         trans_np_dict = geom_to_np(
-            trans_ins, inter_args=trans_args.int_num)
+            trans_ins, inter=True, inter_args=trans_args.int_num)
     else:
         trans_np_dict = geom_to_np(trans_ins)
 
@@ -893,7 +861,7 @@ def perturb_map_seq(vector_map, trans_args, info, map_version, visual, trans_dic
     if (trans_args.int_num and trans_args.int_ord) == 'after' or (not trans_args.int_num and trans_args.int_sav):
         trans_np_dict = np_to_geom(trans_np_dict)
         trans_np_dict = geom_to_np(
-            trans_np_dict, trans_args.int_num)
+            trans_np_dict, inter=True, inter_args=trans_args.int_num)
         visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
 
     elif trans_args.int_num and not trans_args.int_sav:
@@ -901,14 +869,14 @@ def perturb_map_seq(vector_map, trans_args, info, map_version, visual, trans_dic
         trans_np_dict = np_to_geom(trans_np_dict)
         trans_ins_np = geom_to_np(trans_ins)
         trans_np_dict = geom_to_np(
-            trans_np_dict, trans_ins_np, int_back=True)
+            trans_np_dict, inter=True, inter_args=trans_ins_np, int_back=True)
 
     else:
         # not trans_args.int_num and not trans_args.int_sav
         if visual.switch:
             trans_np_dict_4_vis = np_to_geom(trans_np_dict)
             trans_np_dict_4_vis = geom_to_np(
-                trans_np_dict_4_vis, trans_args.int_num)
+                trans_np_dict_4_vis, inter=True, inter_args=trans_args.int_num)
             visual.vis_contours(trans_np_dict_4_vis,
                                 trans_dic['patch_box'], map_version)
 
@@ -926,8 +894,7 @@ def perturb_map(vector_map, trans_args, trans_ins, patch_box):
     # info[map_version+'_correspondence'] = corr_dict
 
     if trans_args.int_num and trans_args.int_ord == 'before':
-        trans_np_dict = geom_to_np(
-            trans_ins, inter_args=trans_args.int_num)
+        trans_np_dict = geom_to_np(trans_ins, inter=True, inter_args=trans_args.int_num)
     else:
         trans_np_dict = geom_to_np(trans_ins)
 
@@ -979,8 +946,9 @@ class get_vec_map():
 
         self.vec_classes = ['boundary', 'lane', 'divider',
                             'ped_crossing', 'centerline', 'agent']
-        self.info['order'] = ['boundary', 'lane', 'divider',
-                              'ped_crossing', 'centerline'] #, 'agent']
+        
+        # set the final plot and saved layers
+        self.info['order'] = ['boundary', 'divider', 'ped_crossing', 'centerline'] #, 'agent']
         self.get_patch_info()
 
         vis_path = os.path.join(out_path, 'visualization')
@@ -1051,8 +1019,8 @@ class get_vec_map():
                         self.patch_box, self.patch_angle, ['lane', 'lane_connector'])
                 elif vec_class == 'divider':  # road_divider, lane_divider
                     map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
-                        self.patch_box, self.patch_angle, ['road_divider']) #, 'lane_divider'])
-                    map_geom_org_dic['lane'] = self.vector_map._get_lane_divider(map_geom_org_dic['lane'])
+                        self.patch_box, self.patch_angle, ['road_divider', 'lane_divider']) #, 'lane_divider'])
+                    # map_geom_org_dic['lane'] = self.vector_map._get_lane_divider(map_geom_org_dic['lane'])
                 elif vec_class == 'ped_crossing':  # oed_crossing
                     map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
                         self.patch_box, self.patch_angle, ['ped_crossing'])
@@ -1081,7 +1049,7 @@ class get_vec_map():
         ann_name = 'annotation'
         map_json_name = 'mme'
         for ind, map_v in enumerate(pertube_vers):
-            if map_v:
+            if map_v.pt_name:
                 ann_name = ann_name + '_' + map_v.pt_name
                 map_json_name = map_json_name + '_' + map_v.pt_name
 
@@ -1095,7 +1063,7 @@ class get_vec_map():
             trans_np_dict  = perturb_map(self.vector_map, map_v, trans_dic['map_ins_dict'], self.patch_box)
             
             if map_v.int_num and map_v.int_ord == 'before':
-                trans_np_dict = geom_to_np(trans_dic['map_ins_dict'], inter_args=map_v.int_num)
+                trans_np_dict = geom_to_np(trans_dic['map_ins_dict'], inter=True, inter_args=map_v.int_num)
             else:
                 trans_np_dict = geom_to_np(trans_dic['map_ins_dict'])
 
@@ -1108,10 +1076,10 @@ class get_vec_map():
             if map_v.noi_pat_gau[0]:
                 trans_np_dict = self.vector_map.map_trans.guassian_noise(trans_np_dict, map_v.noi_pat_gau)
                 
-            if (map_v.int_num and map_v.int_ord) == 'after' or (not map_v.int_num and map_v.int_sav):
+            if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
                 trans_np_dict = np_to_geom(trans_np_dict)
                 trans_np_dict = geom_to_np(
-                    trans_np_dict, map_v.int_num)
+                    trans_np_dict, inter=True, inter_args=map_v.int_num)
                 if self.vis_switch:
                     self.visual.vis_contours(trans_np_dict, self.patch_box, ann_name)
 
@@ -1121,13 +1089,13 @@ class get_vec_map():
                 trans_np_dict = np_to_geom(trans_np_dict)
                 trans_ins_np = geom_to_np(trans_dic['map_ins_dict'])
                 trans_np_dict = geom_to_np(
-                    trans_np_dict, trans_ins_np, int_back=True)
+                    trans_np_dict, inter=True, inter_args=trans_ins_np, int_back=True)
 
             else:  # not map_v.int_num and not map_v.int_sav
                 if self.vis_switch:
                     trans_np_dict_4_vis = np_to_geom(trans_np_dict)
                     trans_np_dict_4_vis = geom_to_np(
-                        trans_np_dict_4_vis, 20)
+                        trans_np_dict_4_vis, inter=True)
                     self.visual.vis_contours(trans_np_dict_4_vis, self.patch_box, ann_name)
 
             self.info[ann_name] = trans_np_dict

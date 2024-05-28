@@ -11,9 +11,45 @@ from ..utils import *
 
 
 class CNuScenesMapExplorer(NuScenesMapExplorer):
-    def __ini__(self, *args, **kwargs):
-        super(self, CNuScenesMapExplorer).__init__(*args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        # super(self, CNuScenesMapExplorer).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
+        self._link_divider_to_lane()
+    
+    def _link_divider_to_lane(self):
+        for lane in self.map_api.lane:
+            for l_r in ['left_lane_divider', 'right_lane_divider']:
+                if len(lane[l_r+'_segments']):
+                    lane_segments = set([seg['node_token'] for seg in lane[l_r+'_segments']])
+                    lane_segment_nodes = set([seg['token'] for seg in lane[l_r+'_segment_nodes']])
+                    for divider in self.map_api.lane_divider:
+                        if len(divider['lane_divider_segments']):
+                            divider_segments = set([seg['node_token'] for seg in divider['lane_divider_segments']])
+                            line_nodes = set(divider['node_tokens'])
+                            if self.has_equal_list([lane_segments, lane_segment_nodes], [divider_segments, line_nodes]):
+                                if 'lane_token' not in divider:
+                                    divider['lane_token'] = []
+                                divider['lane_token'].append(lane['token'])
+                                lane[l_r+'_token'] = divider['token']
+
+    def has_equal_list(self, team1, team2):
+        """
+        Determine whether there is at least one list in each team that contains the same elements in any order.
+        
+        :param team1: A list of two lists, representing the first team.
+        :param team2: A list of two lists, representing the second team.
+        :return: True if there is at least one list in each team that contains the same elements, False otherwise.
+        """
+        # Iterate through each list in team1
+        for list1 in team1:
+            # Iterate through each list in team2
+            for list2 in team2:
+                # Check if the lists contain the same elements in any order
+                if list1 == list2:
+                    return True
+        
+        return False
 
 def get_available_scenes(nusc):
     """Get available scenes from the input nuscenes class.
