@@ -2,7 +2,7 @@ import os
 from .scripts import create_nuscenes_infos, create_av2_infos_mp, PerturbParameters
 
 
-class MapModEx():
+class MapModEX():
     def __init__(self, data_root:str, output_path = None):
         self.data_root = data_root
         
@@ -13,8 +13,10 @@ class MapModEx():
         else:
             self.output = output_path
             
-        self.pt_version = [None]
         self.pt_version_name = 0
+        self.pt_version = []
+        pt_v = {'pt_name':'org'}
+        self.add_pt_version(pt_v)
     
     def _update_attribute(self, attr_name, new_value):
         if hasattr(self, attr_name):
@@ -26,17 +28,20 @@ class MapModEx():
         if not org:
             self.pt_version = []
         
+        for pt_v in pt_type:
+            self.add_pt_version(pt_v)
+            
+    def add_pt_version(self, pt_v):
         pt_para = PerturbParameters()
         
-        for pt_version in pt_type:
-            if not pt_version['pt_name']:
-                self.pt_version_name += 1
-                pt_version['pt_name'] = 'pt_v_' +str(self.pt_version_name)
-            
-            for key, val in pt_version.items():
-                pt_para.update_attribute(key, val)
+        if 'pt_name' not in pt_v:
+            self.pt_version_name += 1
+            pt_v['pt_name'] = 'pt_v_' +str(self.pt_version_name)
         
-            self.pt_version.append(pt_para)
+        for key, val in pt_v.items():
+            pt_para.update_attribute(key, val)
+    
+        self.pt_version.append(pt_para)
         
     def mod_nuscenes(self, map_version:list, root_name='nuscenes', max_sweeps=10, output_type='json', info_prefix='nuscenes', vis=False):
         for v_name in map_version:

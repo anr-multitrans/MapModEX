@@ -12,3 +12,6 @@ __pycache__/
 
 *.pkl
 *.pyc
+documents/images/annotation_add_lane.png
+documents/images/annotation_delete_lane.png
+documents/images/annotation.png

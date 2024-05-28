@@ -31,10 +31,10 @@ pip install mapmodex
 ## Usage
 We provide a run file [execution_ex.py](./python-sdk/execution_ex.py) illustrating how to use MapModEX.
 ```python
-from mapmodex import MapModEx
+from mapmodex import MapModEX
 
-## load MapModEx
-mme = MapModEx(data_root:str)
+## load MapModEX
+mme = MapModEX(data_root:str)
 
 ## set perturbation versions
 pt_geom_1 = {'del_lan':[1, 0.3, None]}   # randomly delet lanes
