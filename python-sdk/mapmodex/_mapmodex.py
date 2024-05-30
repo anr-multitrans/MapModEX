@@ -47,7 +47,7 @@ class MapModEX():
         for v_name in map_version:
             print('generating %s - %s' % ('NuScenes', v_name))
             create_nuscenes_infos(
-                root_path=os.path.join(self.data_root, 'nuscenes'),
+                root_path=os.path.join(self.data_root, root_name),
                 out_path=os.path.join(self.output, 'nuscenes'),
                 info_prefix=info_prefix,
                 pertube_vers=self.pt_version,
@@ -57,20 +57,21 @@ class MapModEX():
                 out_type = output_type)
             
     def mod_av2(self, map_version:list, root_name='av2', pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0], output_type='json', info_prefix='av2', vis=False):
-            for v_name in map_version:
-                print('generating %s - %s' % ('argoverse 2', v_name))
-                create_av2_infos_mp(
-                    root_path=os.path.join(self.data_root, 'av2'),
-                    info_prefix=info_prefix,
-                    pertube_vers=self.pt_version,
-                    dest_path=os.path.join(self.output, 'av2'),
-                    split=v_name,
-                    pc_range=pc_range,
-                    vis=vis,
-                    output_type=output_type)
+        for v_name in map_version:
+            print('generating %s - %s' % ('argoverse 2', v_name))
+            create_av2_infos_mp(
+                root_path=os.path.join(self.data_root, root_name),
+                info_prefix=info_prefix,
+                pertube_vers=self.pt_version,
+                dest_path=os.path.join(self.output, 'av2'),
+                split=v_name,
+                pc_range=pc_range,
+                vis=vis,
+                output_type=output_type)
 
     def mod_mme(self, mme_path = None):
         if mme_path is None:
             mme_path = self.data_root
             
         pass #TODO
+    

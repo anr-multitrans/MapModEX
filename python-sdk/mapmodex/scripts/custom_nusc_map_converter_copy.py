@@ -189,7 +189,8 @@ def _fill_trainval_infos(nusc,
                          out_type,
                          max_sweeps=10,
                          point_cloud_range=[-15.0, -30.0, -10.0, 15.0, 30.0, 10.0],
-                         vis=False):
+                         vis=False,
+                         diy=False):
     """Generate the train/val infos from the raw data.
 
     Args:
@@ -285,7 +286,7 @@ def _fill_trainval_infos(nusc,
         info['sweeps'] = sweeps
         # obtain annotation
         info = obtain_vectormap(
-            nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=vis)
+            nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=vis, diy=diy)
         # info = obtain_perturb_vectormap(nusc_maps, map_explorer, info, point_cloud_range)
 
         if sample['scene_token'] in train_scenes:
@@ -296,7 +297,7 @@ def _fill_trainval_infos(nusc,
     return train_nusc_infos, val_nusc_infos
 
 
-def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=False):
+def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=False, diy=False):
     lidar2ego = np.eye(4)
     lidar2ego[:3, :3] = Quaternion(info['lidar2ego_rotation']).rotation_matrix
     lidar2ego[:3, 3] = info['lidar2ego_translation']
@@ -314,7 +315,7 @@ def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, per
 
     info['dataset'] = 'nuscenes'
     gma = get_vec_map(info, nusc, nusc_maps[location], map_explorer[location],
-                      lidar2global_translation, lidar2global_rotation, point_cloud_range, out_path, out_type, vis=vis)
+                      lidar2global_translation, lidar2global_rotation, point_cloud_range, out_path, out_type, vis=vis, diy=diy)
     info = gma.get_map_ann(pertube_vers)
 
     return info
@@ -323,11 +324,12 @@ def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, per
 def create_nuscenes_infos(root_path,
                           out_path,
                           info_prefix,
-                          pertube_vers,
                           out_type,
+                          pertube_vers=[],
                           version='v1.0-trainval',
                           max_sweeps=10,
-                          vis=False):
+                          vis=False,
+                          diy=False):
     """Create info file of nuscene dataset.
 
     Given the raw data, generate its related info file in pkl format.
@@ -393,7 +395,7 @@ def create_nuscenes_infos(root_path,
             len(train_scenes), len(val_scenes)))
 
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis)  # patch_size=30x60(default)
+        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis, diy=diy)  # patch_size=30x60(default)
     # train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
     #     nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, max_sweeps=max_sweeps, point_cloud_range=[-30,-60,-10,30,60,10]) #patch_size=60x120
 

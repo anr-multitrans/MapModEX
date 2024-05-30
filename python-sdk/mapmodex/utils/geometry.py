@@ -30,3 +30,17 @@ def merge_polylines_if_same_track(line1, line2):
             
             return merged_line
     return None
+
+def one_type_line_geom_to_instances(line_geom):
+    line_instances = []
+
+    for line in line_geom:
+        if not line.is_empty:
+            if line.geom_type == 'MultiLineString':
+                for single_line in line.geoms:
+                    line_instances.append(single_line)
+            elif line.geom_type == 'LineString':
+                line_instances.append(line)
+            else:
+                raise NotImplementedError
+    return line_instances

@@ -1,24 +1,20 @@
-import asyncio
-import copy
 import sys
 import numpy as np
 from nuscenes.eval.common.utils import Quaternion, quaternion_yaw
 from nuscenes.map_expansion.map_api import NuScenesMapExplorer
 
-from shapely import affinity, ops
-from shapely.geometry import MultiLineString, MultiPolygon, Polygon, box, LineString
+from shapely.geometry import MultiPolygon, Polygon, LineString
 
 from .trajectory import get_nuscenes_trajectory, add_tra_to_vecmap
-from .peturbation import MapTransform
+from .vectorization import get_vect_map
 
 # from utils.visualization import RenderMap
 from ..utils import *
 
 
-class VectorizedLocalMap(object):
+class GetMapLayerGeom(object):
     def __init__(self,
                  nusc,
-                 nusc_map,
                  map_explorer,
                  patch_box=(0,0,60,30),
                  patch_angle=0,
@@ -32,17 +28,13 @@ class VectorizedLocalMap(object):
                  centerline_classes=['lane_connector', 'lane']):
         super().__init__()
         self.nusc = nusc
-        self.nusc_map = nusc_map
         self.map_explorer = map_explorer
         self.vec_classes = map_classes
         self.line_classes = line_classes
-        self.ped_crossing_classes = ped_crossing_classes
         self.polygon_classes = contour_classes + \
             centerline_classes + ped_crossing_classes
-        self.centerline_classes = centerline_classes
         self.patch_box = patch_box
         self.patch_angle = patch_angle
-        self.map_trans = MapTransform(self.map_explorer)
         self.delete = False
         self.avm = avm
         self.ego_SE3_city = ego_SE3_city
@@ -50,124 +42,10 @@ class VectorizedLocalMap(object):
         # self.delete_record = delet_record(
         #     self.map_explorer, self.pertu_nusc_infos)
 
-    def _init_pertu_nusc_infos(self, empty=True) -> None:
-        if empty:
-            self.pertu_nusc_infos = {"polygon": [],
-                                     "line": [],
-                                     "node": [],
-                                     "boundary": [],
-                                     "divider": [],
-                                     "ped_crossing": [],
-                                     "drivable_area": [],
-                                     "road_segment": [],
-                                     "road_block": [],
-                                     "lane": [],
-                                     "walkway": [],
-                                     "stop_line": [],
-                                     "carpark_area": [],
-                                     "road_divider": [],
-                                     "lane_divider": [],
-                                     "traffic_light": [],
-                                     "centerline": [],
-                                     "agent": [],
-                                     "canvas_edge": self.nusc_map.canvas_edge,
-                                     "version": self.nusc_map.version,
-                                     "arcline_path_3": [],
-                                     "connectivity": [],
-                                     "lane_connector": []}  # nusc_maps.json
-        else:
-            self.pertu_nusc_infos = {"polygon": copy.deepcopy(self.nusc_map.polygon),
-                                     "line": copy.deepcopy(self.nusc_map.line),
-                                     "node": copy.deepcopy(self.nusc_map.node),
-                                     "road_segment": copy.deepcopy(self.nusc_map.road_segment),
-                                     "lane": copy.deepcopy(self.nusc_map.lane),
-                                     "boundary": [],
-                                     "road_divider": copy.deepcopy(self.nusc_map.road_divider),
-                                     "lane_divider": copy.deepcopy(self.nusc_map.lane_divider),
-                                     "divider": [],
-                                     "ped_crossing": copy.deepcopy(self.nusc_map.ped_crossing),
-                                     "centerline": [],
-                                     "agent": [],
-                                     "canvas_edge": self.nusc_map.canvas_edge,
-                                     "version": self.nusc_map.version}  # nusc_maps.json
-            self.delete = True
-
-    def gen_vectorized_samples(self, map_geom_org_dic, tran_args=None):
-        self._init_pertu_nusc_infos()
-        
-        '''get transformed gt map layers'''
-        map_ins_org_dict = {}
-        map_geom_dict = {}
-        map_ins_dict = {}
-
-        # geom level pertubation
-        if tran_args is not None: 
-            if tran_args.del_lan[0]:
-                map_geom_org_dic = self.map_trans.del_centerline(map_geom_org_dic, tran_args.del_lan)
-
-            if tran_args.add_lan[0]:
-                map_geom_org_dic = self.map_trans.add_centerline(map_geom_org_dic, tran_args.add_lan)
-            
-            if tran_args.wid_lan[0]:
-                map_geom_org_dic = self.map_trans.widden_lane(map_geom_org_dic, tran_args.wid_lan)
-                map_geom_org_dic['centerline'] = self._get_centerline(map_geom_org_dic['lane'])
-                map_geom_org_dic = self.get_centerline_line(map_geom_org_dic)
-
-            if tran_args.aff_tra_pat[0] or tran_args.rot_pat[0] or tran_args.sca_pat[0] or tran_args.ske_pat[0] or tran_args.shi_pat[0]:
-                map_geom_org_dic = self.map_trans.transfor_patch(map_geom_org_dic, tran_args)
-
-        # keep the instance part only in the patch.
-        for vec_class in map_geom_org_dic.keys():
-            map_geom_dict[vec_class] = get_geom_in_patch(self.map_explorer, map_geom_org_dic[vec_class], [
-                                                        0, 0, self.patch_box[2], self.patch_box[3]])
-        
-        map_ins_org_dict = make_dict(self.vec_classes)
-        # transfer non linestring geom to instance
-        for vec_class in map_geom_org_dic.keys():
-            if vec_class in ['lane', 'centerline', 'agent']:
-                # map_ins_org_dict[vec_class] = self.ped_poly_geoms_to_instances(
-                #     map_geom_org_dic[vec_class])
-                for v in map_geom_org_dic[vec_class].values():
-                    map_ins_org_dict[vec_class].append(v['geom'])
-            elif vec_class == 'boundary':
-                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(map_geom_org_dic)   # merge boundary and lanes
-            elif vec_class == 'divider':
-                map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_org_dic) # take from 'divier' and 'lane', merge overlaped and delete duplicated
-            elif vec_class == 'ped_crossing':
-                continue
-            else:
-                raise ValueError(f'WRONG vec_class: {vec_class}')
-
-        if 'ped_crossing' in map_geom_org_dic:
-            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_org_dic['ped_crossing'], map_ins_org_dict['boundary']) # merge overlaped or connected ped_crossing to one
-
-        if 'divider' in map_ins_org_dict.keys():
-            new_dividers = []
-            for line in map_ins_org_dict['divider']:
-                divider_check = 1
-                for boundary in map_ins_org_dict['boundary']:
-                    if line.intersection(boundary):
-                        divider_check = 0
-                        break
-
-                if divider_check:
-                    new_dividers.append(line)
-
-            map_ins_org_dict['divider'] = new_dividers
-
-        # keep the instance part only in the patch.
-        for vec_class in map_ins_org_dict.keys():
-            map_ins_dict[vec_class] = get_geom_in_patch(self.map_explorer, map_ins_org_dict[vec_class], [
-                                                        0, 0, self.patch_box[2], self.patch_box[3]])
-
-        return {'map_ins_dict': map_ins_dict, 'map_geom_dic': map_geom_dict, 'map_ins_org_dict': map_ins_org_dict, 'map_geom_org_dic': map_geom_org_dic, 'pertu_nusc_infos': self.pertu_nusc_infos}
-
-    def gen_vectorized_samples_by_pt_json(self, patch_box=[0, 0, 60, 30], patch_angle=0):
+    def gen_vectorized_samples_by_pt_json(self, patch_box=[0, 0, 60, 30], patch_angle=0):   #TODO
         # get transformed gt map layers
         patch_box = [0, 0, 60, 30]
         patch_angle = 0
-
-        map_ins_dict = {}
 
         for vec_class in self.vec_classes:
             line_geom = self.get_polyline(patch_box, patch_angle, vec_class)
@@ -477,7 +355,7 @@ class VectorizedLocalMap(object):
 
     def centerline_geoms_to_instances(self, geoms_dict):
         centerline_geoms_list = union_centerline(geoms_dict)
-        return self._one_type_line_geom_to_instances(centerline_geoms_list)
+        return one_type_line_geom_to_instances(centerline_geoms_list)
 
     def get_centerline_line(self, geoms_dict):
         centerline_list = self.centerline_geoms_to_instances(
@@ -594,346 +472,9 @@ class VectorizedLocalMap(object):
 
         return polygon_list_dic
 
-    def get_contour_line_w_record(self, patch_box, patch_angle, layer_name):
-        if layer_name not in self.map_explorer.map_api.non_geometric_polygon_layers:
-            raise ValueError('{} is not a polygonal layer'.format(layer_name))
-
-        patch_x = patch_box[0]
-        patch_y = patch_box[1]
-
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
-
-        records = getattr(self.map_explorer.map_api, layer_name)
-
-        polygon_list = []
-        record_list = []
-        for record in records:
-            polygon = self.map_explorer.map_api.extract_polygon(
-                record['polygon_token'])
-
-            if polygon.is_valid:
-                new_polygon = polygon.intersection(patch)
-                if not new_polygon.is_empty:
-                    new_polygon = affinity.rotate(new_polygon, -patch_angle,
-                                                  origin=(patch_x, patch_y))
-                    new_polygon = affinity.affine_transform(new_polygon,
-                                                            [1.0, 0.0, 0.0, 1.0, -patch_x, -patch_y])
-                    if new_polygon.geom_type == 'Polygon':
-                        new_polygon = MultiPolygon([new_polygon])
-                    polygon_list.append(new_polygon)
-                    record_list.append(record)
-
-        return polygon_list, record_list
-
-    def line_geoms_to_instances(self, geom_dict):
-        line_geom_list = {}
-
-        if 'divider' in geom_dict.keys():
-            for k, divider_dic in geom_dict['divider'].items():
-                if divider_dic['from'] == 'road_divider':
-                    # line_geom_list.update(divider_dic)
-                    line_geom_list[k] = divider_dic
-            
-        if 'lane' in geom_dict.keys():
-            for lane_dic in geom_dict['lane'].values():
-                if lane_dic['from'] == 'lane': 
-                    for div_name in ['left_lane_divider_token', 'right_lane_divider_token']:
-                        if div_name in lane_dic:
-                            if lane_dic[div_name] in geom_dict['divider']:
-                                line_geom_list[lane_dic[div_name]] = geom_dict['divider'][lane_dic[div_name]]
-
-        line_instances = [divider['geom'] for divider in line_geom_list.values()]
-        new_lans = [lane_dic['geom'] for lane_dic in geom_dict['lane'].values() if lane_dic['from'] in ['centerline']]
-        
-        if line_instances and new_lans:
-            for lane in new_lans:
-                line_instances_temp = []
-                for divider in line_instances:
-                    if not divider.is_empty:
-                        int_divider = interpolate(divider)
-                        line_instances_temp += keep_non_intersecting_parts(int_divider, lane, True)
-                line_instances = copy.deepcopy(line_instances_temp)
-
-        return line_instances
-
-    def _one_type_line_geom_to_instances(self, line_geom):
-        line_instances = []
-
-        for line in line_geom:
-            if not line.is_empty:
-                if line.geom_type == 'MultiLineString':
-                    for single_line in line.geoms:
-                        line_instances.append(single_line)
-                elif line.geom_type == 'LineString':
-                    line_instances.append(line)
-                else:
-                    raise NotImplementedError
-        return line_instances
-
-    def ped_poly_geoms_to_instances(self, ped_geom, boundary=[]):
-        ped = []
-
-        for ped_dic in ped_geom.values():
-            if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
-                if ped_dic['from'] == 'new':
-                    for b in boundary:
-                        if b.intersection(ped_dic['geom']):
-                            ped.append(ped_dic['geom'])
-                            break
-                else:
-                    ped.append(ped_dic['geom'])
-
-        union_segments = ops.unary_union(ped)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x - 0.2, -max_y - 0.2, max_x + 0.2, max_y + 0.2)
-        exteriors = []
-        interiors = []
-        if union_segments.geom_type == 'Polygon':
-            union_segments = MultiPolygon([union_segments])
-        for poly in union_segments.geoms:
-            exteriors.append(poly.exterior)
-            for inter in poly.interiors:
-                interiors.append(inter)
-
-        results = []
-        for ext in exteriors:
-            if ext.is_ccw:
-                ext = LineString(list(ext.coords)[::-1])
-            lines = ext.intersection(local_patch)
-            if isinstance(lines, MultiLineString):
-                lines = ops.linemerge(lines)
-            results.append(lines)
-
-        for inter in interiors:
-            if not inter.is_ccw:
-                ext = LineString(list(ext.coords)[::-1])
-            lines = inter.intersection(local_patch)
-            if isinstance(lines, MultiLineString):
-                lines = ops.linemerge(lines)
-            results.append(lines)
-
-        return self._one_type_line_geom_to_instances(results)
-
-    def poly_geoms_to_instances(self, polygon_geom):
-        polygons = []
-        
-        if 'boundary' in polygon_geom.keys():
-            for road_dic in polygon_geom['boundary'].values():
-                polygons.append(road_dic['geom'])
-
-        if 'lane' in polygon_geom.keys():
-            for lane_dic in polygon_geom['lane'].values():
-                if lane_dic['from'] != 'lane_connector':
-                    polygons.append(lane_dic['geom'])
-
-        union_segments = ops.unary_union(polygons)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
-        exteriors = []
-        interiors = []
-        if union_segments.geom_type != 'MultiPolygon':
-            union_segments = MultiPolygon([union_segments])
-        for poly in union_segments.geoms:
-            exteriors.append(poly.exterior)
-            for inter in poly.interiors:
-                interiors.append(inter)
-
-        results = []
-        for ext in exteriors:
-            if ext.is_ccw:
-                ext.coords = list(ext.coords)[::-1]
-            lines = ext.intersection(local_patch)
-            if isinstance(lines, MultiLineString):
-                lines = ops.linemerge(lines)
-            results.append(lines)
-
-        for inter in interiors:
-            if not inter.is_ccw:
-                inter.coords = list(inter.coords)[::-1]
-            lines = inter.intersection(local_patch)
-            if isinstance(lines, MultiLineString):
-                lines = ops.linemerge(lines)
-            results.append(lines)
-
-        return self._one_type_line_geom_to_instances(results)
-
-    def get_org_info_dict(self, map_ins_dict):
-        corr_dict = {'divider': [], 'ped_crossing': [], 'boundary': []}
-        len_dict = {'divider': 0, 'ped_crossing': 0, 'boundary': 0}
-
-        for vec_class in map_ins_dict.keys():
-            if len(map_ins_dict[vec_class]):
-                len_dict[vec_class] = len(map_ins_dict[vec_class])
-                corr_dict[vec_class] = [
-                    i for i in range(len(map_ins_dict[vec_class]))]
-
-        return corr_dict, len_dict
-
-    def get_trans_instance(self, map_ins_dict, trans_args, patch_box, patch_angle):
-
-        corr_dict, len_dict = self.get_org_info_dict(map_ins_dict)
-
-        if trans_args.del_ped[0]:
-            map_ins_dict, corr_dict = self.map_trans.delete_layers(
-                map_ins_dict, corr_dict, len_dict, 'ped_crossing', trans_args.del_ped)
-
-        if trans_args.shi_ped[0]:
-            map_ins_dict, corr_dict = self.map_trans.shift_layers(
-                map_ins_dict, corr_dict, len_dict, 'ped_crossing', trans_args.shi_ped,  patch_box)
-
-        if trans_args.add_ped[0]:
-            map_ins_dict, corr_dict = self.map_trans.add_layers(
-                map_ins_dict, corr_dict, len_dict, 'ped_crossing', trans_args.add_ped,  patch_box, patch_angle)
-
-        if trans_args.del_div[0]:
-            map_ins_dict, corr_dict = self.map_trans.delete_layers(
-                map_ins_dict, corr_dict, len_dict, 'divider', trans_args.del_div)
-
-        if trans_args.shi_div[0]:
-            map_ins_dict, corr_dict = self.map_trans.shift_layers(
-                map_ins_dict, corr_dict, len_dict, 'divider', trans_args.shi_div,  patch_box)
-
-        if trans_args.add_div[0]:
-            pass  # TODO
-
-        if trans_args.del_bou[0]:
-            map_ins_dict, corr_dict = self.map_trans.delete_layers(
-                map_ins_dict, corr_dict, len_dict, 'boundary', trans_args.del_bou)
-
-        if trans_args.shi_bou[0]:
-            map_ins_dict, corr_dict = self.map_trans.shift_layers(
-                map_ins_dict, corr_dict, len_dict, 'boundary', trans_args.shi_bou,  patch_box)
-
-        if trans_args.add_bou[0]:
-            map_ins_dict, corr_dict = self.map_trans.add_layers(
-                map_ins_dict, corr_dict, len_dict, 'boundary', trans_args.add_bou,  patch_box, patch_angle)
-
-        # if trans_args.wid_bou[0]:
-        #     map_ins_dict, corr_dict = self.map_trans.zoom_layers(
-        #         map_ins_dict, corr_dict, len_dict, 'boundary', trans_args.wid_bou,  patch_box)
-
-        # if trans_args.aff_tra_pat[0] or trans_args.rot_pat[0] or trans_args.sca_pat[0] or trans_args.ske_pat[0] or trans_args.shi_pat[0]:
-        #     map_ins_dict, corr_dict = self.map_trans.transfor_patch(
-        #         map_ins_dict, corr_dict, patch_box, trans_args)
-
-        return map_ins_dict, corr_dict, len_dict
-
-# Asynchronous execution utility from https://stackoverflow.com/questions/9786102/how-do-i-parallelize-a-simple-python-loop
-
-
-def background(f):
-    def wrapped(*args, **kwargs):
-        return asyncio.get_event_loop().run_in_executor(None, f, *args, **kwargs)
-
-    return wrapped
-
-
-def perturb_map_seq(vector_map, trans_args, info, map_version, visual, trans_dic):
-    trans_dic = copy.deepcopy(trans_dic)
-    trans_ins, corr_dict, len_dict = vector_map.get_trans_instance(
-        trans_dic['map_ins_dict'], trans_args, trans_dic['patch_box'], trans_dic['patch_angle'])
-    info[map_version+'_correspondence'] = corr_dict
-
-    if trans_args.int_num and trans_args.int_ord == 'before':
-        trans_np_dict = geom_to_np(
-            trans_ins, inter=True, inter_args=trans_args.int_num)
-    else:
-        trans_np_dict = geom_to_np(trans_ins)
-
-    if trans_args.wid_bou[0]:
-        trans_np_dict = vector_map.map_trans.zoom_patch_by_layers(
-            trans_np_dict, len_dict, 'boundary', trans_args.wid_bou, trans_dic['patch_box'])
-
-    if trans_args.def_pat_tri[0]:
-        trans_np_dict = vector_map.map_trans.difromate_map(
-            trans_np_dict, trans_args.def_pat_tri, trans_dic['patch_box'])
-
-    if trans_args.def_pat_gau[0]:
-        trans_np_dict = vector_map.map_trans.guassian_warping(
-            trans_np_dict, trans_args.def_pat_gau, trans_dic['patch_box'])
-
-    if trans_args.noi_pat_gau[0]:
-        trans_np_dict = vector_map.map_trans.guassian_noise(
-            trans_np_dict, trans_args.noi_pat_gau)
-
-    if (trans_args.int_num and trans_args.int_ord) == 'after' or (not trans_args.int_num and trans_args.int_sav):
-        trans_np_dict = np_to_geom(trans_np_dict)
-        trans_np_dict = geom_to_np(
-            trans_np_dict, inter=True, inter_args=trans_args.int_num)
-        visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
-
-    elif trans_args.int_num and not trans_args.int_sav:
-        visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
-        trans_np_dict = np_to_geom(trans_np_dict)
-        trans_ins_np = geom_to_np(trans_ins)
-        trans_np_dict = geom_to_np(
-            trans_np_dict, inter=True, inter_args=trans_ins_np, int_back=True)
-
-    else:
-        # not trans_args.int_num and not trans_args.int_sav
-        if visual.switch:
-            trans_np_dict_4_vis = np_to_geom(trans_np_dict)
-            trans_np_dict_4_vis = geom_to_np(
-                trans_np_dict_4_vis, inter=True, inter_args=trans_args.int_num)
-            visual.vis_contours(trans_np_dict_4_vis,
-                                trans_dic['patch_box'], map_version)
-
-    info[map_version] = trans_np_dict
-
-    return info
-
-# @background
-
-
-def perturb_map(vector_map, trans_args, trans_ins, patch_box):
-    # trans_dic = copy.deepcopy(trans_dic)
-    # trans_ins, corr_dict, len_dict = vector_map.get_trans_instance(
-    #     trans_dic['map_ins_dict'], trans_args, trans_dic['patch_box'], trans_dic['patch_angle'])
-    # info[map_version+'_correspondence'] = corr_dict
-
-    if trans_args.int_num and trans_args.int_ord == 'before':
-        trans_np_dict = geom_to_np(trans_ins, inter=True, inter_args=trans_args.int_num)
-    else:
-        trans_np_dict = geom_to_np(trans_ins)
-
-    # if trans_args.wid_bou[0]:
-    #     trans_np_dict = vector_map.map_trans.zoom_patch_by_layers(
-    #         trans_np_dict, len_dict, 'boundary', trans_args.wid_bou, patch_box)
-
-    if trans_args.def_pat_tri[0]:
-        trans_np_dict = vector_map.map_trans.difromate_map(
-            trans_np_dict, trans_args.def_pat_tri, patch_box)
-
-    if trans_args.def_pat_gau[0]:
-        trans_np_dict = vector_map.map_trans.guassian_warping(
-            trans_np_dict, trans_args.def_pat_gau, patch_box)
-
-    if trans_args.noi_pat_gau[0]:
-        trans_np_dict = vector_map.map_trans.guassian_noise(
-            trans_np_dict, trans_args.noi_pat_gau)
-
-    # if (trans_args.int_num and trans_args.int_ord) == 'after' or (not trans_args.int_num and trans_args.int_sav):
-    #     trans_np_dict = np_to_geom(trans_np_dict)
-    #     trans_np_dict = geom_to_np(
-    #         trans_np_dict, trans_args.int_num)
-    #     # visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
-
-    # elif trans_args.int_num and not trans_args.int_sav:
-    #     # visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
-    #     trans_np_dict = np_to_geom(trans_np_dict)
-    #     trans_ins_np = geom_to_np(trans_ins)
-    #     trans_np_dict = geom_to_np(
-    #         trans_np_dict, trans_ins_np, int_back=True)
-
-    return trans_np_dict
-
 # main function
-
-
 class get_vec_map():
-    def __init__(self, info, nusc, nusc_maps, map_explorer, e2g_translation, e2g_rotation, pc_range, out_path, out_type, avm=None, vis=True):
+    def __init__(self, info, nusc, nusc_maps, map_explorer, e2g_translation, e2g_rotation, pc_range, out_path, out_type, avm=None, vis=True, diy=False):
         self.nusc = nusc
         self.nusc_maps = nusc_maps
         self.map_explorer = map_explorer
@@ -943,6 +484,7 @@ class get_vec_map():
         self.e2g_rotation = e2g_rotation
         self.pc_range = pc_range
         self.avm = avm
+        self.diy=diy
 
         self.vec_classes = ['boundary', 'lane', 'divider',
                             'ped_crossing', 'centerline', 'agent']
@@ -952,7 +494,7 @@ class get_vec_map():
         self.get_patch_info()
 
         vis_path = os.path.join(out_path, 'visualization')
-        self.visual = RenderMap(self.info, self.vector_map, vis_path, vis)
+        self.visual = RenderMap(self.info, vis_path, vis)
 
         # map info setting
         if out_type == 'json':
@@ -980,8 +522,8 @@ class get_vec_map():
 
         self.patch_angle = quaternion_yaw(rotation) / np.pi * 180
         # map class setting
-        self.vector_map = VectorizedLocalMap(
-            self.nusc, self.nusc_maps, self.map_explorer, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
+        self.get_geom = GetMapLayerGeom(
+            self.nusc, self.map_explorer, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
 
     def get_map_ann(self, pertube_vers):
         '''get transformed gt map layers'''
@@ -991,19 +533,19 @@ class get_vec_map():
         if self.info['dataset'] == 'av2':    ## AV2 
             for vec_class in self.vec_classes:
                 if vec_class == 'ped_crossing':  # oed_crossing
-                    map_geom_org_dic[vec_class] = self.vector_map.extract_local_ped_crossing(
+                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_ped_crossing(
                         self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
                 elif vec_class == 'boundary':  # road_segment
-                    map_geom_org_dic[vec_class] = self.vector_map.extract_local_boundary(
+                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_boundary(
                         self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
                 elif vec_class == 'lane':  # lane, connector
-                    map_geom_org_dic[vec_class] = self.vector_map.extract_local_lane(
+                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_lane(
                         self.avm, self.patch_box, self.patch_angle)
                 elif vec_class == 'centerline':  # lane, connector
-                    map_geom_org_dic = self.vector_map.extract_local_centerline(
+                    map_geom_org_dic = self.get_geom.extract_local_centerline(
                         self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
                 elif vec_class == 'divider':  # road_divider, lane_divider
-                    map_geom_org_dic = self.vector_map.extract_local_divider(
+                    map_geom_org_dic = self.get_geom.extract_local_divider(
                         self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
                 elif vec_class == 'agent':
                     map_geom_org_dic[vec_class] = {}  # TODO
@@ -1012,21 +554,21 @@ class get_vec_map():
         elif self.info['dataset'] == 'nuscenes': ## NuScenes
             for vec_class in self.vec_classes:
                 if vec_class == 'boundary':  # road_segment
-                    map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
+                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
                         self.patch_box, self.patch_angle, ['road_segment'])
                 elif vec_class == 'lane':  # road_divider, lane_divider
-                    map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
+                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
                         self.patch_box, self.patch_angle, ['lane', 'lane_connector'])
                 elif vec_class == 'divider':  # road_divider, lane_divider
-                    map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
+                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
                         self.patch_box, self.patch_angle, ['road_divider', 'lane_divider']) #, 'lane_divider'])
-                    # map_geom_org_dic['lane'] = self.vector_map._get_lane_divider(map_geom_org_dic['lane'])
+                    # map_geom_org_dic['lane'] = self.get_geom._get_lane_divider(map_geom_org_dic['lane'])
                 elif vec_class == 'ped_crossing':  # oed_crossing
-                    map_geom_org_dic[vec_class] = self.vector_map.get_map_geom(
+                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
                         self.patch_box, self.patch_angle, ['ped_crossing'])
                 elif vec_class == 'centerline':  # lane, connector
-                    map_geom_org_dic[vec_class] = self.vector_map._get_centerline(map_geom_org_dic['lane'])
-                    map_geom_org_dic = self.vector_map.get_centerline_line(map_geom_org_dic)
+                    map_geom_org_dic[vec_class] = self.get_geom._get_centerline(map_geom_org_dic['lane'])
+                    map_geom_org_dic = self.get_geom.get_centerline_line(map_geom_org_dic)
                 elif vec_class == 'agent':
                     agents_trajectory = get_nuscenes_trajectory(
                         self.nusc, self.info['token'], ['vehicle'], type='geom')
@@ -1038,77 +580,14 @@ class get_vec_map():
         elif self.info['dataset'] == 'mme':
             ns_map = NuScenesMap4MME(self.nusc_maps.dataroot, self.nusc_maps.map_name)
             ns_mapex = NuScenesMapExplorer(ns_map)
-            self.vector_map = VectorizedLocalMap(
-                self.nusc, ns_map, ns_mapex, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
-            map_geom_org_dic = self.vector_map.gen_vectorized_samples_by_pt_json()
+            self.get_geom = GetMapLayerGeom(
+                self.nusc, ns_mapex, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
+            map_geom_org_dic = self.get_geom.gen_vectorized_samples_by_pt_json()
         else:
             sys.exit('wrong dataset')
     
         self.info['map_geom_org_dic'] = map_geom_org_dic
         
-        ann_name = 'annotation'
-        map_json_name = 'mme'
-        for ind, map_v in enumerate(pertube_vers):
-            if map_v.pt_name:
-                ann_name = ann_name + '_' + map_v.pt_name
-                map_json_name = map_json_name + '_' + map_v.pt_name
-
-            trans_dic = self.vector_map.gen_vectorized_samples(
-                map_geom_org_dic, map_v)
-
-            # if self.vis_switch:
-            #     trans_np_dict_4_vis = geom_to_np(trans_dic['map_ins_dict'], 20)
-            #     self.visual.vis_contours(trans_np_dict_4_vis, self.patch_box, ann_name)
-             
-            trans_np_dict  = perturb_map(self.vector_map, map_v, trans_dic['map_ins_dict'], self.patch_box)
-            
-            if map_v.int_num and map_v.int_ord == 'before':
-                trans_np_dict = geom_to_np(trans_dic['map_ins_dict'], inter=True, inter_args=map_v.int_num)
-            else:
-                trans_np_dict = geom_to_np(trans_dic['map_ins_dict'])
-
-            if map_v.def_pat_tri[0]:
-                trans_np_dict = self.vector_map.map_trans.difromate_map(trans_np_dict, map_v.def_pat_tri, self.patch_box)
-
-            if map_v.def_pat_gau[0]:
-                trans_np_dict = self.vector_map.map_trans.guassian_warping(trans_np_dict, map_v.def_pat_gau, self.patch_box)
-
-            if map_v.noi_pat_gau[0]:
-                trans_np_dict = self.vector_map.map_trans.guassian_noise(trans_np_dict, map_v.noi_pat_gau)
-                
-            if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
-                trans_np_dict = np_to_geom(trans_np_dict)
-                trans_np_dict = geom_to_np(
-                    trans_np_dict, inter=True, inter_args=map_v.int_num)
-                if self.vis_switch:
-                    self.visual.vis_contours(trans_np_dict, self.patch_box, ann_name)
-
-            elif map_v.int_num and not map_v.int_sav:
-                if self.vis_switch:
-                    self.visual.vis_contours(trans_np_dict, self.patch_box, ann_name)
-                trans_np_dict = np_to_geom(trans_np_dict)
-                trans_ins_np = geom_to_np(trans_dic['map_ins_dict'])
-                trans_np_dict = geom_to_np(
-                    trans_np_dict, inter=True, inter_args=trans_ins_np, int_back=True)
-
-            else:  # not map_v.int_num and not map_v.int_sav
-                if self.vis_switch:
-                    trans_np_dict_4_vis = np_to_geom(trans_np_dict)
-                    trans_np_dict_4_vis = geom_to_np(
-                        trans_np_dict_4_vis, inter=True)
-                    self.visual.vis_contours(trans_np_dict_4_vis, self.patch_box, ann_name)
-
-            self.info[ann_name] = trans_np_dict
-            
-            if self.map_path is not None:
-                self.info[map_json_name] = vector_to_map_json(
-                    trans_dic, self.info, map_json_name, self.map_path)
-
-        # w loop
-        # loop = asyncio.get_event_loop()                                              # Have a new event loop
-        # looper = asyncio.gather(*[perturb_map(self.vector_map, trans_args, self.info, 'annotation_{}'.format(i), visual, trans_dic) for i in range(10)])         # Run the loop
-        # results = loop.run_until_complete(looper)
-
-        # sys.exit('DONE!')
-
+        self.info = get_vect_map(self.nusc, self.nusc_maps, self.map_explorer, pertube_vers, self.info, self.vis_switch, self.visual, self.map_path)
+        
         return self.info

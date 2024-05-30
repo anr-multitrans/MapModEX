@@ -2,7 +2,7 @@
 
 HDMaps play a central role in modern autonomous driving frameworks, being at the center of basic geolocalization to complex trajectory forecasting. However, there is a remarkable lack of tools to modify HDMaps in the current autonomous driving ecosystem. In this paper, we propose MapModEX, a new library that allows simple and procedural manipulation of existing HDMaps for many possible applications. We also provide an experimental demonstration of MapModEX's usefulness for online HDMap estimation and critical scenario construction.
 
-![](./documents/images/mapmodex_example.png)
+![](./documents/images/cc8c0bf57f984915a77078b10eb33198_eef55c3b48f34d949959b45130ee293a.png)
 
 <!-- #TODO Visuals -->
 
@@ -38,7 +38,7 @@ mme = MapModEX(data_root:str)
 
 ## set perturbation versions
 pt_geom_1 = {'del_lan':[1, 0.3, None]}   # randomly delet lanes
-mme.update_pt_version([pt_geom_1]) # default is [None]
+mme.update_pt_version([pt_geom_1])
 
 ## lunch MapModEx
 mme.mod_nuscenes(map_version_nusc:str)

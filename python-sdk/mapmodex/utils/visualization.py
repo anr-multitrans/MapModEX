@@ -2,7 +2,6 @@ import math
 import os
 import pickle
 from typing import List, Optional, Tuple
-
 import descartes
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
@@ -11,20 +10,174 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.patches import Arrow, Rectangle
 from nuscenes.map_expansion.bitmap import BitMap
+from matplotlib.widgets import Button, TextBox
+import tkinter as tk
+from tkinter import messagebox
+from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon, box
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from shapely.errors import TopologicalError
+from shapely.validation import make_valid
+
+
 from .utilities import *
 # Recommended style to use as the plots will show grids.
 plt.style.use('seaborn-whitegrid')
 
 
 colors_plt = {'divider': '#808000', 'ped_crossing': '#000080',
-              'boundary': '#008000', 'centerline': 'mistyrose', 'agent': 'r', 'lane': 'b'}
+              'boundary': '#008000', 'centerline': 'mistyrose', 'agent': 'red', 'lane': 'blue'}
+clipping_box = box(-15, -30, 15, 30)
 
+def plot_geometry(ax, geometry, index=None, color='blue', linewidth=1, fontsize=12):
+    try:
+        clipped_geometry = geometry.intersection(clipping_box)
+    except TopologicalError:
+        # Fix the invalid geometry
+        valid_geometry = make_valid(geometry)
+        clipped_geometry = valid_geometry.intersection(clipping_box)
+    
+    if clipped_geometry.is_empty:
+        return
+    
+    if isinstance(clipped_geometry, Point):
+        ax.plot(clipped_geometry.x, clipped_geometry.y, 'o', color=color, label=f'{index}' if index is not None else '', linewidth=linewidth)
+        if index is not None:
+            ax.text(clipped_geometry.x, clipped_geometry.y, f'{index}', fontsize=fontsize, fontweight='bold', ha='right')
+    elif isinstance(clipped_geometry, LineString):
+        x, y = clipped_geometry.xy
+        ax.plot(x, y, color=color, label=f'{index}' if index is not None else '', linewidth=linewidth)
+        if index is not None:
+            ax.text(min(max(x[0], clipping_box.bounds[0]), clipping_box.bounds[2]),
+                    min(max(y[0], clipping_box.bounds[1]), clipping_box.bounds[3]),
+                    f'{index}', fontsize=fontsize, fontweight='bold', ha='right')
+    elif isinstance(clipped_geometry, Polygon):
+        x, y = clipped_geometry.exterior.xy
+        ax.plot(x, y, color=color, label=f'{index}' if index is not None else '', linewidth=linewidth)
+        if index is not None:
+            ax.text(min(max(x[0], clipping_box.bounds[0]), clipping_box.bounds[2]),
+                    min(max(y[0], clipping_box.bounds[1]), clipping_box.bounds[3]),
+                    f'{index}', fontsize=fontsize, fontweight='bold', ha='right')
+    elif isinstance(clipped_geometry, MultiLineString):
+        for linestring in clipped_geometry:
+            x, y = linestring.xy
+            ax.plot(x, y, color=color, label=f'{index}' if index is not None else '', linewidth=linewidth)
+            if index is not None:
+                ax.text(min(max(x[0], clipping_box.bounds[0]), clipping_box.bounds[2]),
+                        min(max(y[0], clipping_box.bounds[1]), clipping_box.bounds[3]),
+                        f'{index}', fontsize=fontsize, fontweight='bold', ha='right')
+    elif isinstance(clipped_geometry, MultiPolygon):
+        for polygon in clipped_geometry:
+            x, y = polygon.exterior.xy
+            ax.plot(x, y, color=color, label=f'{index}' if index is not None else '', linewidth=linewidth)
+            if index is not None:
+                ax.text(min(max(x[0], clipping_box.bounds[0]), clipping_box.bounds[2]),
+                        min(max(y[0], clipping_box.bounds[1]), clipping_box.bounds[3]),
+                        f'{index}', fontsize=fontsize, fontweight='bold', ha='right')
+
+def update_canvas(figure, ax, interactive_geometries, static_geometries):
+    ax.clear()
+    ax.set_xlim(-15, 15)
+    ax.set_ylim(-30, 30)
+    for st_layer, geometrys in static_geometries.items():
+        for geometry in geometrys:
+            plot_geometry(ax, geometry['geom'], color=colors_plt[st_layer])  # Static geometries in red
+            
+    for in_layer, geometrys in interactive_geometries.items():
+        for i, geometry in enumerate(geometrys):
+            plot_geometry(ax, geometry['geom'], i, color=colors_plt[in_layer], linewidth=3, fontsize=32)  # Interactive geometries in blue
+    ax.relim()
+    ax.autoscale_view()
+    figure.canvas.draw()
+
+def on_choose(figure, ax, interactive_geometries, static_geometries, input_box, deleted_geometries):
+    input_value = input_box.get()
+    try:
+        indices = list(map(int, input_value.split()))
+        indices = sorted(set(indices), reverse=True)
+        
+        for v in interactive_geometries.values():
+            for index in indices:
+                if 0 <= index < len(v):
+                    deleted_geometries.append(v[index])
+                    del v[index]
+                else:
+                    raise ValueError
+        update_canvas(figure, ax, interactive_geometries, static_geometries)
+    except ValueError:
+        messagebox.showwarning("Invalid input", "Please enter valid integer indices.")
+
+def on_done(root):
+    root.quit()
+    root.destroy()
+
+def get_bounding_box(geometries):
+    minx, miny, maxx, maxy = None, None, None, None
+    for geometry in geometries:
+        bounds = geometry['geom'].bounds
+        if minx is None or bounds[0] < minx:
+            minx = bounds[0]
+        if miny is None or bounds[1] < miny:
+            miny = bounds[1]
+        if maxx is None or bounds[2] > maxx:
+            maxx = bounds[2]
+        if maxy is None or bounds[3] > maxy:
+            maxy = bounds[3]
+    return minx, miny, maxx, maxy
+
+def geometry_manager(geometries_dict, interactive_layer, static_layers):
+    all_geometries = []
+    
+    interactive_geometries = {}
+    interactive_geometries[interactive_layer] = [geom for geom in geometries_dict[interactive_layer].values()]
+    all_geometries += interactive_geometries[interactive_layer]
+    
+    static_geometries = {}
+    for layer in static_layers:
+        if layer == 'lane':
+            static_geometries[layer] = [geom for geom in geometries_dict[layer].values() if geom['from'] != 'lane_connector']
+        else:
+            static_geometries[layer] = [geom for geom in geometries_dict[layer].values()]
+    
+        all_geometries += static_geometries[layer]
+    
+    deleted_geometries = []
+    
+    minx, miny, maxx, maxy = get_bounding_box(all_geometries)
+    
+    root = tk.Tk()
+    root.title("Geometry Manager")
+    
+    figure, ax = plt.subplots(figsize=(8, 6))
+    canvas = FigureCanvasTkAgg(figure, root)
+    canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
+    
+    input_frame = tk.Frame(root)
+    input_frame.pack(pady=10)
+    
+    input_label = tk.Label(input_frame, text="Enter indices to remove (space-separated):", font=("Arial", 14, "bold"))
+    input_label.pack(side=tk.LEFT)
+    
+    input_box = tk.Entry(input_frame, font=("Arial", 14, "bold"))
+    input_box.pack(side=tk.LEFT)
+    
+    choose_button = tk.Button(input_frame, text="Choose", font=("Arial", 14, "bold"), command=lambda: on_choose(figure, ax, interactive_geometries, static_geometries, input_box, deleted_geometries))
+    choose_button.pack(side=tk.LEFT, padx=5)
+    
+    done_button = tk.Button(root, text="Done", font=("Arial", 14, "bold"), command=lambda: on_done(root))
+    done_button.pack(pady=10)
+    
+    update_canvas(figure, ax, interactive_geometries, static_geometries)
+    
+    root.geometry(f"{int((maxx - minx) * 60 + 200)}x{int((maxy - miny) * 60 + 200)}")
+    
+    root.mainloop()
+    
+    return deleted_geometries
 
 class RenderMap:
 
     def __init__(self,
                  info,
-                 vector_map,
                  vis_path: str,
                  vis_switch=True,
                  vis_show=False):
@@ -46,15 +199,12 @@ class RenderMap:
                               traffic_light='#7e772e')
 
         self.info = info
-        self.map_api = vector_map.nusc_map
-        self.map_exploer = vector_map.map_explorer
         self.switch = vis_switch
         self.show = vis_show
         self.save = os.path.join(vis_path, info['scene_token'], info['token'])
-        self.canvas_max_x = self.map_api.canvas_edge[0]
         self.canvas_min_x = 0
-        self.canvas_max_y = self.map_api.canvas_edge[1]
         self.canvas_min_y = 0
+        self.patch_box = [0,0,60,30]
 
     def vis_patch(self, patch_box):
         if self.switch:
@@ -285,13 +435,13 @@ class RenderMap:
 
             plt.close()
 
-    def vis_contours(self, contours, patch_box, map_version):
+    def vis_contours(self, contours, map_version):
         if self.switch:
 
             plt.figure(figsize=(2, 4))
             # plt.figure
-            plt.xlim(-patch_box[3]/2, patch_box[3]/2)
-            plt.ylim(-patch_box[2]/2, patch_box[2]/2)
+            plt.xlim(-self.patch_box[3]/2, self.patch_box[3]/2)
+            plt.ylim(-self.patch_box[2]/2, self.patch_box[2]/2)
             plt.axis('off')
             
             for pred_label_3d in contours.keys():
@@ -370,7 +520,8 @@ def show_geom(new_shape):
         os.exit("wrong geom type: ", new_shape.geom_type)
         
     plt.show()
-
+    
+    
 if __name__ == '__main__':
     map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion/pt_patch.pkl'
     save_map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion'

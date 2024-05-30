@@ -42,6 +42,7 @@ class PerturbParameters():
                  def_pat_gau=[0, None, [0, 1]],
                  # gaussian mean and standard deviation
                  noi_pat_gau=[0, None, [0, 1]],
+                 diy=False,
                  # Interpolation
                  int_num=0,
                  int_ord='before',  # before the perturbation or after it
@@ -71,6 +72,8 @@ class PerturbParameters():
         self.def_pat_gau = def_pat_gau
         self.noi_pat_gau = noi_pat_gau
 
+        self.diy = diy
+        
         self.int_num = int_num
         self.int_ord = int_ord
         self.int_sav = int_sav
@@ -83,50 +86,52 @@ class PerturbParameters():
     
 
 class MapTransform:
-    def __init__(self, map_explorer: NuScenesMapExplorer, layer_names=['ped_crossing', 'road_segment', 'road_block']):
+    def __init__(self, map_explorer: NuScenesMapExplorer, layer_names=['ped_crossing', 'road_segment', 'road_block'], tran_args=None, patch_angle=0, patch_box=[0,0,60,30]):
         self.map_explorer = map_explorer
         self.layer_names = layer_names   # 'road_divider' are lines
-        self.patch_angle = 0
+        self.patch_angle = patch_angle
+        self.patch_box = patch_box
+        self.tran_args=tran_args
 
-    def transfor_patch(self, instance_list, args):
+    def transfor_patch(self, instance_list):
         # if args.aff_tra_pat[0]:
         #     ins = affinity.affine_transform(
         #         ins, args.aff_tra_pat[2])
-        if args.rot_pat[0]:
-            rot_p = [random.randint(args.rot_pat[2][0][0], args.rot_pat[2][0][1]), args.rot_pat[2][1]]
-            # ins = affinity.rotate(ins, random.randint(args.rot_pat[2][0][0], args.rot_pat[2][0][1]), args.rot_pat[2][1])
-        # if args.sca_pat[0]:
+        if self.tran_args.rot_pat[0]:
+            rot_p = [random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1]), self.tran_args.rot_pat[2][1]]
+            # ins = affinity.rotate(ins, random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1]), self.tran_args.rot_pat[2][1])
+        # if self.tran_args.sca_pat[0]:
         #     ins = affinity.scale(
-        #         ins, args.sca_pat[2][0], args.sca_pat[2][1])
-        # if args.ske_pat[0]:
+        #         ins, self.tran_args.sca_pat[2][0], self.tran_args.sca_pat[2][1])
+        # if self.tran_args.ske_pat[0]:
         #     ins = affinity.skew(
-        #         ins, args.ske_pat[2][0], args.ske_pat[2][1], args.ske_pat[2][2])
-        if args.shi_pat[0]:
-            shi_p = [random.uniform(args.shi_pat[2][0][0], args.shi_pat[2][0][1]), random.uniform(args.shi_pat[2][1][0], args.shi_pat[2][1][1])]
-            # ins = affinity.translate(ins, random.uniform(args.shi_pat[2][0][0], args.shi_pat[2][0][1]), random.uniform(args.shi_pat[2][1][0], args.shi_pat[2][1][1]))
+        #         ins, self.tran_args.ske_pat[2][0], self.tran_args.ske_pat[2][1], self.tran_args.ske_pat[2][2])
+        if self.tran_args.shi_pat[0]:
+            shi_p = [random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1]), random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])]
+            # ins = affinity.translate(ins, random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1]), random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1]))
         
         for key in instance_list.keys():
             if len(instance_list[key]):
                 for ins_v in instance_list[key].values():
                     ins = ins_v['geom']
                     
-                    if args.aff_tra_pat[0]:
+                    if self.tran_args.aff_tra_pat[0]:
                         ins = affinity.affine_transform(
-                            ins, args.aff_tra_pat[2])
-                    if args.rot_pat[0]:
+                            ins, self.tran_args.aff_tra_pat[2])
+                    if self.tran_args.rot_pat[0]:
                         ins = affinity.rotate(ins, rot_p[0], rot_p[1])
-                    if args.sca_pat[0]:
+                    if self.tran_args.sca_pat[0]:
                         ins = affinity.scale(
-                            ins, args.sca_pat[2][0], args.sca_pat[2][1])
-                    if args.ske_pat[0]:
+                            ins, self.tran_args.sca_pat[2][0], self.tran_args.sca_pat[2][1])
+                    if self.tran_args.ske_pat[0]:
                         ins = affinity.skew(
-                            ins, args.ske_pat[2][0], args.ske_pat[2][1], args.ske_pat[2][2])
-                    if args.shi_pat[0]:
+                            ins, self.tran_args.ske_pat[2][0], self.tran_args.ske_pat[2][1], self.tran_args.ske_pat[2][2])
+                    if self.tran_args.shi_pat[0]:
                         ins = affinity.translate(ins, shi_p[0], shi_p[1])
 
                     ins_v['geom'] = ins
                     # geom = valid_geom(
-                    #     ins, [0, 0, patch_box[2], patch_box[3]], 0)
+                    #     ins, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
                     
                     # if geom is None:
                     #     del instance_list[key][ind]
@@ -169,7 +174,7 @@ class MapTransform:
 
         return new_polygon
 
-    def creat_boundray(self, bd, patch_box):
+    def creat_boundray(self, bd):
         # Get the center point of the boundary and draw a circle with this center point
         center_point = bd.interpolate(bd.length / 2)
         c = center_point.buffer(3.7).boundary
@@ -202,14 +207,25 @@ class MapTransform:
 
         return [new_b_1]
 
-    def add_centerline(self, map_geom_dict, tran_args):   #TODO
+    def add_centerline(self, map_geom_dict):   #TODO
         centerlines = map_geom_dict['centerline']
 
-        times = math.ceil(len(centerlines.keys()) * tran_args[1])
-        if times == 0:
-            times = 1
+        if self.tran_args.diy:
+            add_centerlines = geometry_manager(map_geom_dict, 'centerline', ['lane', 'ped_crossing', 'boundary'])
+            
+            # for cl_dict in delet_centerlines:
+            #     add_centerlines = centerlines.pop(cl_dict['token'])
+        else:
+            times = math.ceil(len(centerlines.keys()) * self.tran_args.add_lan[1])
+            if times == 0:
+                times = 1
 
-        for _ in range(times):
+            add_centerlines = []
+            for _ in range(times):
+                add_centerlines.append(centerlines[random.choice([k for k in centerlines.keys()])])
+
+        # for _ in range(times):
+        for centerline_dic in add_centerlines:
             centerline_dic = centerlines[random.choice([k for k in centerlines.keys()])]
             
             # affinity tranform
@@ -248,7 +264,7 @@ class MapTransform:
 
         return map_geom_dict
 
-    def widden_lane(self, map_geom_org_dic,  tran_args):
+    def widden_lane(self, map_geom_org_dic):
         centerlines = map_geom_org_dic['centerline']
         road_segments = map_geom_org_dic['boundary']
         lanes = map_geom_org_dic['lane']
@@ -256,7 +272,7 @@ class MapTransform:
         ped_crossings = map_geom_org_dic['ped_crossing']
         # agents = map_geom_org_dic['agent']
         
-        times = math.ceil(len(centerlines.keys()) * tran_args[1])
+        times = math.ceil(len(centerlines.keys()) * self.tran_args.wid_lan[1])
         if times == 0:
             return map_geom_org_dic
 
@@ -270,21 +286,27 @@ class MapTransform:
             
         return map_geom_org_dic
             
-    def del_centerline(self, map_geom_org_dic,  tran_args):
+    def del_centerline(self, map_geom_org_dic):
         centerlines = map_geom_org_dic['centerline']
         road_segments = map_geom_org_dic['boundary']
         lanes = map_geom_org_dic['lane']
         lane_dividers = map_geom_org_dic['divider']
         ped_crossings = map_geom_org_dic['ped_crossing']
         agents = map_geom_org_dic['agent']
+        
+        if self.tran_args.diy:
+            delet_centerlines = geometry_manager(map_geom_org_dic, 'centerline', ['lane', 'ped_crossing', 'boundary'])
+            
+            for cl_dict in delet_centerlines:
+                delet_centerline = centerlines.pop(cl_dict['token'])
+        else:
+            times = math.ceil(len(centerlines.keys()) * self.tran_args.del_lan[1])
+            if times == 0:
+                return map_geom_org_dic
 
-        times = math.ceil(len(centerlines.keys()) * tran_args[1])
-        if times == 0:
-            return map_geom_org_dic
-
-        delet_centerlines = random_unique_items(centerlines, times)
-        for key in delet_centerlines.keys():
-            delet_centerline = centerlines.pop(key)
+            delet_centerlines = random_unique_items(centerlines, times)
+            for key in delet_centerlines.keys():
+                delet_centerline = centerlines.pop(key)
 
         # check if there are map layers are inuse after remove centerlines
         # remove a centerline need to also remove it's token from connected lanes and ped_crossings
@@ -358,6 +380,7 @@ class MapTransform:
             ped_crossings, [road_segments, lanes], True)
 
         return map_geom_org_dic
+    
 
     def delete_layers(self, instance_list, correspondence_list, len_dict, layer_name, args):
         times = math.ceil(len_dict[layer_name] * args[1])
@@ -369,7 +392,7 @@ class MapTransform:
 
         return instance_list, correspondence_list
 
-    def shift_layers(self, instance_list, correspondence_list, len_dict, layer_name, args, patch_box):
+    def shift_layers(self, instance_list, correspondence_list, len_dict, layer_name, args):
         times = math.floor(len_dict[layer_name] * args[1])
         index_list = random.choices(
             [i for i in range(len_dict[layer_name])], k=times)
@@ -383,14 +406,14 @@ class MapTransform:
             geom = affinity.translate(
                 instance_list[layer_name][ind], rx, ry)
 
-            geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+            geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
 
             if geom is None:
                 rx *= -1
                 ry *= -1
                 geom = affinity.translate(
                     instance_list[layer_name][ind], rx, ry)
-                geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+                geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
 
                 if geom is None:
                     del instance_list[layer_name][ind]
@@ -405,7 +428,7 @@ class MapTransform:
 
         return instance_list, correspondence_list
 
-    def zoom_layers(self, instance_list, correspondence_list, len_dict, layer_name, args, patch_box):
+    def zoom_layers(self, instance_list, correspondence_list, len_dict, layer_name, args):
         times = math.floor(len_dict[layer_name] * args[1])
         index_list = random.choices(
             [i for i in range(len_dict[layer_name])], k=times)
@@ -420,7 +443,7 @@ class MapTransform:
                 ry = mv[0][1]
                 geom = affinity.translate(ele, rx, ry)
 
-                geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+                geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
 
                 if geom is None:
                     continue
@@ -440,10 +463,10 @@ class MapTransform:
 
         return instance_list, correspondence_list
 
-    def zoom_grid(self, patch_box, def_args, zoom_are=None):
-        nx, ny = int(patch_box[3]+1)+2, int(patch_box[2]+1)+2
-        x = np.linspace(-int(patch_box[3]/2)-1, int(patch_box[3]/2)+1, nx)
-        y = np.linspace(-int(patch_box[2]/2)-1, int(patch_box[2]/2)+1, ny)
+    def zoom_grid(self, def_args, zoom_are=None):
+        nx, ny = int(self.patch_box[3]+1)+2, int(self.patch_box[2]+1)+2
+        x = np.linspace(-int(self.patch_box[3]/2)-1, int(self.patch_box[3]/2)+1, nx)
+        y = np.linspace(-int(self.patch_box[2]/2)-1, int(self.patch_box[2]/2)+1, ny)
         xv, yv = np.meshgrid(x, y, indexing='ij')
 
         xv = xv.reshape(33, 63, 1)
@@ -519,7 +542,7 @@ class MapTransform:
 
         return np.array(new_point_list)
 
-    def zoom_patch_by_layers(self, map_ins_dict, len_dict, layer_name, args, patch_box):
+    def zoom_patch_by_layers(self, map_ins_dict, len_dict, layer_name, args):
         times = math.floor(len_dict[layer_name] * args[1])
         index_list = random.choices(
             [i for i in range(len_dict[layer_name])], k=times)
@@ -528,26 +551,26 @@ class MapTransform:
             if ind in index_list:
                 widen_area = (ele[:, 0].min(), ele[:, 1].min(),
                               ele[:, 0].max(), ele[:, 1].max())
-                g_xv, g_yv = self.zoom_grid(patch_box, args, widen_area)
+                g_xv, g_yv = self.zoom_grid(self.patch_box, args, widen_area)
 
                 for key in map_ins_dict.keys():
                     if len(map_ins_dict[key]):
                         for ind, ins in enumerate(map_ins_dict[key]):
                             ins = fix_corner(
-                                ins, [0, 0, patch_box[2], patch_box[3]])
+                                ins, [0, 0, self.patch_box[2], self.patch_box[3]])
                             map_ins_dict[key][ind] = self.warping(
                                 ins, g_xv, g_yv)
 
         return map_ins_dict
 
-    def add_layers(self, instance_list, correspondence_list, len_dict, layer_name, args, patch_box, patch_angle):
+    def add_layers(self, instance_list, correspondence_list, len_dict, layer_name, args, patch_angle):
         times = math.ceil(len_dict[layer_name] * args[1])
 
         if layer_name == 'ped_crossing':
             if times == 0:
                 times = 1
 
-            patch_coords = self.patch_box_2_coords(patch_box)
+            patch_coords = self.patch_box_2_coords(self.patch_box)
             road_seg_records = self.map_explorer.map_api.get_records_in_patch(
                 patch_coords, ['road_segment'])['road_segment']
             if len(road_seg_records):
@@ -562,7 +585,7 @@ class MapTransform:
                         new_geom = self.creat_ped_polygon(
                             random.choice(road_seg_records))
                         new_geom_v = valid_geom(
-                            new_geom, patch_box, patch_angle)
+                            new_geom, self.patch_box, patch_angle)
                         if new_geom_v is not None:
                             if new_geom_v.boundary.geom_type == 'MultiLineString':
                                 instance_list[layer_name].append(
@@ -579,13 +602,13 @@ class MapTransform:
             for bd_id in picked_boundary:
                 corr_ind = correspondence_list[layer_name][bd_id]
                 new_bd = self.creat_boundray(
-                    instance_list[layer_name][bd_id], patch_box)
+                    instance_list[layer_name][bd_id], self.patch_box)
 
                 v_new_bd = []
                 v_new_corr = []
                 for bd in new_bd:
                     v_bd = valid_geom(
-                        bd, [0, 0, patch_box[2], patch_box[3]], 0)
+                        bd, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
                     if v_bd is not None:
                         v_new_bd.append(v_bd)
                         v_new_corr.append(corr_ind)
@@ -634,15 +657,15 @@ class MapTransform:
         new_ins = np.array(new_point_list)
         return new_ins
 
-    def difromate_map(self, map_ins_dict, def_args, patch_box):
+    def difromate_map(self, map_ins_dict):
         # Vertical distortion amplitude random maximum range int
-        v = def_args[2][0]
+        v = self.tran_args.def_pat_tri[2][0]
         # Horizontal distortion amplitude random maximum range int
-        h = def_args[2][1]
-        i = def_args[2][2]  # Inclination amplitude [-Max_r Max_r] int
+        h = self.tran_args.def_pat_tri[2][1]
+        i = self.tran_args.def_pat_tri[2][2]  # Inclination amplitude [-Max_r Max_r] int
 
-        xlim = [-patch_box[3]/2, patch_box[3]/2]
-        ylim = [-patch_box[2]/2, patch_box[2]/2]
+        xlim = [-self.patch_box[3]/2, self.patch_box[3]/2]
+        ylim = [-self.patch_box[2]/2, self.patch_box[2]/2]
 
         for key in map_ins_dict.keys():
             if len(map_ins_dict[key]):
@@ -652,10 +675,10 @@ class MapTransform:
 
         return map_ins_dict
 
-    def gaussian_grid(self, patch_box, def_args):
-        nx, ny = int(patch_box[3]+1)+2, int(patch_box[2]+1)+2
-        x = np.linspace(-int(patch_box[3]/2)-1, int(patch_box[3]/2)+1, nx)
-        y = np.linspace(-int(patch_box[2]/2)-1, int(patch_box[2]/2)+1, ny)
+    def gaussian_grid(self, def_args):
+        nx, ny = int(self.patch_box[3]+1)+2, int(self.patch_box[2]+1)+2
+        x = np.linspace(-int(self.patch_box[3]/2)-1, int(self.patch_box[3]/2)+1, nx)
+        y = np.linspace(-int(self.patch_box[2]/2)-1, int(self.patch_box[2]/2)+1, ny)
         xv, yv = np.meshgrid(x, y, indexing='ij')
         g_xv = xv + \
             np.random.normal(def_args[2][0], def_args[2][1], size=[nx, ny])
@@ -668,23 +691,74 @@ class MapTransform:
 
         return g_xv, g_yv
 
-    def guassian_warping(self, map_ins_dict, def_args, patch_box):
-        g_xv, g_yv = self.gaussian_grid(patch_box, def_args)
+    def guassian_warping(self, map_ins_dict):
+        g_xv, g_yv = self.gaussian_grid(self.tran_args.def_pat_gau)
 
         for key in map_ins_dict.keys():
             if len(map_ins_dict[key]):
                 for ind, ins in enumerate(map_ins_dict[key]):
-                    ins = fix_corner(ins, [0, 0, patch_box[2], patch_box[3]])
+                    ins = fix_corner(ins, [0, 0, self.patch_box[2], self.patch_box[3]])
                     map_ins_dict[key][ind] = self.warping(ins, g_xv, g_yv)
 
         return map_ins_dict
 
-    def guassian_noise(self, map_ins_dict, def_args):
+    def guassian_noise(self, map_ins_dict):
         for key in map_ins_dict.keys():
             if len(map_ins_dict[key]):
                 for ind, ins in enumerate(map_ins_dict[key]):
                     g_nois = np.random.normal(
-                        def_args[2][0], def_args[2][1], ins.shape)
+                        self.tran_args.noi_pat_gau[2][0], self.tran_args.noi_pat_gau[2][1], ins.shape)
                     map_ins_dict[key][ind] += g_nois
 
         return map_ins_dict
+
+    def perturb_vect(self, trans_np_dict):
+        # trans_dic = copy.deepcopy(trans_dic)
+        # trans_ins, corr_dict, len_dict = vector_map.get_trans_instance(
+        #     trans_dic['map_ins_dict'], self.tran_args, trans_dic['patch_box'], trans_dic['patch_angle'])
+        # info[map_version+'_correspondence'] = corr_dict
+
+        # if self.tran_args.wid_bou[0]:
+        #     trans_np_dict = vector_map.map_trans.zoom_patch_by_layers(
+        #         trans_np_dict, len_dict, 'boundary', self.tran_args.wid_bou, self.patch_box)
+
+        if self.tran_args.def_pat_tri[0]:
+            trans_np_dict = self.difromate_map(trans_np_dict)
+
+        if self.tran_args.def_pat_gau[0]:
+            trans_np_dict = self.guassian_warping(trans_np_dict)
+
+        if self.tran_args.noi_pat_gau[0]:
+            trans_np_dict = self.guassian_noise(trans_np_dict)
+
+        # if (self.tran_args.int_num and self.tran_args.int_ord) == 'after' or (not self.tran_args.int_num and self.tran_args.int_sav):
+        #     trans_np_dict = np_to_geom(trans_np_dict)
+        #     trans_np_dict = geom_to_np(
+        #         trans_np_dict, self.tran_args.int_num)
+        #     # visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
+
+        # elif self.tran_args.int_num and not self.tran_args.int_sav:
+        #     # visual.vis_contours(trans_np_dict, trans_dic['patch_box'], map_version)
+        #     trans_np_dict = np_to_geom(trans_np_dict)
+        #     trans_ins_np = geom_to_np(trans_ins)
+        #     trans_np_dict = geom_to_np(
+        #         trans_np_dict, trans_ins_np, int_back=True)
+
+        return trans_np_dict
+
+    def pertub_geom(self, map_geom_org_dic):
+        if self.tran_args.del_lan[0]:
+            map_geom_org_dic = self.del_centerline(map_geom_org_dic)
+
+        if self.tran_args.add_lan[0]:
+            map_geom_org_dic = self.add_centerline(map_geom_org_dic)
+        
+        # if self.tran_args.wid_lan[0]:
+        #     map_geom_org_dic = self.widden_lane(map_geom_org_dic)
+        #     map_geom_org_dic['centerline'] = self._get_centerline(map_geom_org_dic['lane'])
+        #     map_geom_org_dic = self.get_centerline_line(map_geom_org_dic)
+
+        if self.tran_args.aff_tra_pat[0] or self.tran_args.rot_pat[0] or self.tran_args.sca_pat[0] or self.tran_args.ske_pat[0] or self.tran_args.shi_pat[0]:
+            map_geom_org_dic = self.transfor_patch(map_geom_org_dic)
+            
+        return map_geom_org_dic

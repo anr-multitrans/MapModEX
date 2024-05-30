@@ -207,8 +207,8 @@ class record_generator:
 def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
     r_gen = record_generator(info_dic["pertu_nusc_infos"])
 
-    ins_dic = info_dic["map_ins_org_dict"]
-    geom_dic = info_dic['map_geom_org_dic']
+    ins_dic = info_dic["map_ins_dic_patch"]
+    geom_dic = info_dic['map_geom_dic_patch']
     for layer_name in geom_dic.keys():
         if layer_name in ['boundary']:
             for geom in ins_dic[layer_name]:

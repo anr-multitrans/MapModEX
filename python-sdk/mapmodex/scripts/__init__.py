@@ -1,4 +1,4 @@
 from .custom_av2_map_converter_copy import create_av2_infos_mp
 from .custom_nusc_map_converter_copy import create_nuscenes_infos
 from .peturbation import PerturbParameters
-from .data_reading import VectorizedLocalMap
+from .data_reading import GetMapLayerGeom
