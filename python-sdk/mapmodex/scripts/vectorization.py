@@ -88,8 +88,6 @@ class VectorizedLocalMap(object):
             self.delete = True
 
     def gen_vectorized_samples(self, map_geom_dic):
-        self._init_pertu_nusc_infos()
-        
         '''get transformed gt map layers'''
         map_ins_org_dict = {}
         
@@ -97,21 +95,21 @@ class VectorizedLocalMap(object):
         # transfer non linestring geom to instance
         for vec_class in map_geom_dic.keys():
             if vec_class in ['lane', 'centerline', 'agent']:
-                # map_ins_org_dict[vec_class] = ped_poly_geoms_to_instances(
-                #     map_geom_dic[vec_class])
                 for v in map_geom_dic[vec_class].values():
                     map_ins_org_dict[vec_class].append(v['geom'])
             elif vec_class == 'boundary':
-                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(map_geom_dic)   # merge boundary and lanes
+                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
             elif vec_class == 'divider':
-                map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_dic) # take from 'divier' and 'lane', merge overlaped and delete duplicated
+                # take from 'divier' and 'lane', merge overlaped and delete duplicated
+                map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_dic) 
             elif vec_class == 'ped_crossing':
                 continue
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
 
+        # merge overlaped or connected ped_crossing to one
         if 'ped_crossing' in map_geom_dic:
-            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic['ped_crossing'], map_ins_org_dict) # merge overlaped or connected ped_crossing to one
+            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic['ped_crossing'], map_ins_org_dict)
 
         if 'divider' in map_ins_org_dict.keys():
             new_dividers = []
@@ -127,7 +125,7 @@ class VectorizedLocalMap(object):
 
             map_ins_org_dict['divider'] = new_dividers
 
-        return {'map_ins_org_dict': map_ins_org_dict, 'map_geom_dic': map_geom_dic, 'pertu_nusc_infos': self.pertu_nusc_infos}
+        return map_ins_org_dict
         
     def _get_centerline(self, lane_dict) -> dict:
         centerline_dict = {}
@@ -302,7 +300,7 @@ class VectorizedLocalMap(object):
 
 def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, visual, map_path):
     vector_map = VectorizedLocalMap(nusc, nusc_maps, map_explorer)
-    map_trans = MapTransform(map_explorer)    
+    map_trans = MapTransform(map_explorer, info['map_geom_org_dic'], vector_map, visual)    
 
     for map_v in pertube_vers:
         if map_v.pt_name:
@@ -310,27 +308,21 @@ def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, 
             map_json_name = 'mme' + '_' + map_v.pt_name
 
         map_trans.tran_args = map_v
-        
-        map_geom_org_dic = copy.deepcopy(info['map_geom_org_dic'])
+        map_trans.ann_name = ann_name
         
         ## geom level pertubation
-        map_geom_pt_dic = map_trans.pertub_geom(map_geom_org_dic)
+        map_trans.pertub_geom(copy.deepcopy(info['map_geom_org_dic']))
         
-        trans_dic = vector_map.gen_vectorized_samples(map_geom_pt_dic)
-        
-        # keep the instance part only in the patch.
+        ## crop the ready-show vectorized geom by patch_box.
+        trans_dic = {}
         map_ins_dict = {}
-        for vec_class, pt_vect_dic in trans_dic['map_ins_org_dict'].items():
+        for vec_class, pt_vect_dic in map_trans.geom_dict.items():
             map_ins_dict[vec_class] = get_geom_in_patch(map_explorer, pt_vect_dic, vector_map.patch_box)
         trans_dic['map_ins_dic_patch'] = map_ins_dict
         
-        if map_v.int_num and map_v.int_ord == 'before':
-            map_vect_dic = geom_to_np(map_ins_dict, inter=True, inter_args=map_v.int_num)
-        else:
-            map_vect_dic = geom_to_np(map_ins_dict)
-        
         ## vectetry level pertubation
-        map_vect_pt_dic  = map_trans.perturb_vect(map_vect_dic)
+        map_trans.perturb_vect()
+        map_vect_pt_dic = map_trans.vect_dict
             
         if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
             map_vect_pt_dic = np_to_geom(map_vect_pt_dic)
@@ -350,18 +342,25 @@ def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, 
         else:  # not map_v.int_num and not map_v.int_sav
             if vis_switch:
                 trans_np_dict_4_vis = np_to_geom(map_vect_pt_dic)
-                trans_np_dict_4_vis = geom_to_np(
-                    trans_np_dict_4_vis, inter=True)
+                trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
                 visual.vis_contours(trans_np_dict_4_vis, ann_name)
 
+        ## crop the ready-show vectorized numpy array by patch_box.
+        map_geom_dict = {}
+        for vec_class, pt_geom_dic in map_vect_pt_dic.items():
+            map_geom_dict[vec_class] = get_vect_in_patch(pt_geom_dic, vector_map.patch_box)
+        
         if map_path is not None:
             # keep the instance part only in the patch.
             map_geom_dict = {}
-            for vec_class, pt_geom_dic in trans_dic['map_geom_dic'].items():
+            for vec_class, pt_geom_dic in map_trans.geom_dict_for_json.items():
                 map_geom_dict[vec_class] = get_geom_in_patch(map_explorer, pt_geom_dic, vector_map.patch_box)
             
             trans_dic['map_geom_dic_patch'] = map_geom_dict
-            # trans_dic['map_ins_dic_patch'] = map_ins_dict
+            
+            vector_map._init_pertu_nusc_infos()
+            trans_dic['pertu_nusc_infos'] = vector_map.pertu_nusc_infos
+
             info[map_json_name] = vector_to_map_json(trans_dic, info, map_json_name, map_path) #TODO use pt-vect
 
         info[ann_name] = map_vect_pt_dic

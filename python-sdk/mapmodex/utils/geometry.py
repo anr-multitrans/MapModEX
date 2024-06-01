@@ -1,5 +1,7 @@
-from shapely.geometry import LineString
+import numpy as np
+from shapely.geometry import Point
 from shapely.ops import linemerge, unary_union
+from shapely import affinity
 
 
 def check_divider_common(divider, divider_list):
@@ -44,3 +46,11 @@ def one_type_line_geom_to_instances(line_geom):
             else:
                 raise NotImplementedError
     return line_instances
+
+def move_geom(centerline_center, polyline, distance):
+    polyline_center = Point(polyline.centroid)
+    direction = np.array([polyline_center.x - centerline_center.x, polyline_center.y - centerline_center.y])
+    mv = direction / np.max(abs(direction))* distance
+    moved_polyline = affinity.translate(polyline, xoff=mv[0], yoff=mv[1])
+
+    return moved_polyline

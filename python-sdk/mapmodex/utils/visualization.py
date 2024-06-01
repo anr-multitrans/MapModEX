@@ -80,11 +80,18 @@ def update_canvas(figure, ax, interactive_geometries, static_geometries):
     ax.set_ylim(-30, 30)
     for st_layer, geometrys in static_geometries.items():
         for geometry in geometrys:
-            plot_geometry(ax, geometry['geom'], color=colors_plt[st_layer])  # Static geometries in red
-            
+            if isinstance(geometry, dict):
+                plot_geometry(ax, geometry['geom'], color=colors_plt[st_layer])
+            else:
+                plot_geometry(ax, geometry, color=colors_plt[st_layer])
+    
     for in_layer, geometrys in interactive_geometries.items():
         for i, geometry in enumerate(geometrys):
-            plot_geometry(ax, geometry['geom'], i, color=colors_plt[in_layer], linewidth=3, fontsize=32)  # Interactive geometries in blue
+            if isinstance(geometry, dict):
+                plot_geometry(ax, geometry['geom'], i, color=colors_plt[in_layer], linewidth=3, fontsize=32)
+            else:
+                plot_geometry(ax, geometry, i, color=colors_plt[in_layer], linewidth=3, fontsize=32)
+    
     ax.relim()
     ax.autoscale_view()
     figure.canvas.draw()
@@ -113,7 +120,11 @@ def on_done(root):
 def get_bounding_box(geometries):
     minx, miny, maxx, maxy = None, None, None, None
     for geometry in geometries:
-        bounds = geometry['geom'].bounds
+        if isinstance(geometry, dict):
+            bounds = geometry['geom'].bounds
+        else:
+            bounds = geometry.bounds
+            
         if minx is None or bounds[0] < minx:
             minx = bounds[0]
         if miny is None or bounds[1] < miny:
@@ -124,19 +135,26 @@ def get_bounding_box(geometries):
             maxy = bounds[3]
     return minx, miny, maxx, maxy
 
-def geometry_manager(geometries_dict, interactive_layer, static_layers):
+def geometry_manager(geometries_dict, interactive_layer, static_layers): #TODO add a vect_dict option
     all_geometries = []
     
     interactive_geometries = {}
-    interactive_geometries[interactive_layer] = [geom for geom in geometries_dict[interactive_layer].values()]
+    if isinstance(geometries_dict, dict):
+        interactive_geometries[interactive_layer] = [geom for geom in geometries_dict[interactive_layer].values()]
+    else:
+        interactive_geometries[interactive_layer] = geometries_dict[interactive_layer]
+        
     all_geometries += interactive_geometries[interactive_layer]
     
     static_geometries = {}
     for layer in static_layers:
-        if layer == 'lane':
-            static_geometries[layer] = [geom for geom in geometries_dict[layer].values() if geom['from'] != 'lane_connector']
+        if isinstance(geometries_dict, dict):
+            if layer == 'lane':
+                static_geometries[layer] = [geom for geom in geometries_dict[layer].values() if geom['from'] != 'lane_connector']
+            else:
+                static_geometries[layer] = [geom for geom in geometries_dict[layer].values()]
         else:
-            static_geometries[layer] = [geom for geom in geometries_dict[layer].values()]
+            static_geometries[layer] = geometries_dict[layer]
     
         all_geometries += static_geometries[layer]
     
@@ -160,7 +178,8 @@ def geometry_manager(geometries_dict, interactive_layer, static_layers):
     input_box = tk.Entry(input_frame, font=("Arial", 14, "bold"))
     input_box.pack(side=tk.LEFT)
     
-    choose_button = tk.Button(input_frame, text="Choose", font=("Arial", 14, "bold"), command=lambda: on_choose(figure, ax, interactive_geometries, static_geometries, input_box, deleted_geometries))
+    choose_button = tk.Button(input_frame, text="Choose", font=("Arial", 14, "bold"),
+                              command=lambda: on_choose(figure, ax, interactive_geometries, static_geometries, input_box, deleted_geometries))
     choose_button.pack(side=tk.LEFT, padx=5)
     
     done_button = tk.Button(root, text="Done", font=("Arial", 14, "bold"), command=lambda: on_done(root))

@@ -209,7 +209,7 @@ def _fill_trainval_infos(nusc,
     val_nusc_infos = []
     frame_idx = 0
     for sample in mmcv.track_iter_progress(nusc.sample):
-        # if sample['scene_token'] != '325cef682f064c55a255f2625c533b75':
+        # if sample['scene_token'] != 'cc8c0bf57f984915a77078b10eb33198':
         #     continue
 
         map_location = nusc.get('log', nusc.get(
@@ -395,9 +395,10 @@ def create_nuscenes_infos(root_path,
             len(train_scenes), len(val_scenes)))
 
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis, diy=diy)  # patch_size=30x60(default)
+        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis, diy=diy)
+    ## set patch_size to 60x120(30x60(default))
     # train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-    #     nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, max_sweeps=max_sweeps, point_cloud_range=[-30,-60,-10,30,60,10]) #patch_size=60x120
+    #     nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, max_sweeps=max_sweeps, point_cloud_range=[-30,-60,-10,30,60,10])
 
     metadata = dict(version=version)
     if test:

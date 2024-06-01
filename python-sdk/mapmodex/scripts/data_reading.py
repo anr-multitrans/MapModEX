@@ -1,14 +1,12 @@
 import sys
 import numpy as np
 from nuscenes.eval.common.utils import Quaternion, quaternion_yaw
-from nuscenes.map_expansion.map_api import NuScenesMapExplorer
 
 from shapely.geometry import MultiPolygon, Polygon, LineString
 
 from .trajectory import get_nuscenes_trajectory, add_tra_to_vecmap
 from .vectorization import get_vect_map
 
-# from utils.visualization import RenderMap
 from ..utils import *
 
 
@@ -145,7 +143,7 @@ class GetMapLayerGeom(object):
 
     def extract_local_divider(self, ego_SE3_city, patch_box, patch_angle, ls_dict):
         nearby_dividers, ls_dict = self.generate_nearby_dividers(ls_dict)
-        patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
 
         line_list_dic = {}
         for line in nearby_dividers:
@@ -173,7 +171,7 @@ class GetMapLayerGeom(object):
         return ls_dict
 
     def extract_local_ped_crossing(self, avm, ego_SE3_city, patch_box, patch_angle):
-        patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
 
         polygon_list_dic = {}
         for pc in avm.get_scenario_ped_crossings():
@@ -220,7 +218,7 @@ class GetMapLayerGeom(object):
 
     def extract_local_boundary(self, avm, ego_SE3_city, patch_box, patch_angle):
         boundary_list = []
-        patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
         for da in avm.get_scenario_vector_drivable_areas():
             boundary_list.append(da.xyz)
 
@@ -268,7 +266,7 @@ class GetMapLayerGeom(object):
         return polygon_list_dic
 
     def extract_local_lane(self, avm, patch_box, patch_angle):
-        patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
         scene_ls_list = avm.get_scenario_lane_segments()
         scene_ls_dict = dict()
         for ls in scene_ls_list:
@@ -294,7 +292,7 @@ class GetMapLayerGeom(object):
         nearby_centerlines = self.generate_nearby_centerlines(
             avm, ls_dict['lane'])
 
-        patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
         line_list_dic = {}
         for line in nearby_centerlines:
             if line.is_empty:  # Skip lines without nodes.
@@ -525,68 +523,78 @@ class get_vec_map():
         self.get_geom = GetMapLayerGeom(
             self.nusc, self.map_explorer, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
 
-    def get_map_ann(self, pertube_vers):
-        '''get transformed gt map layers'''
+    def get_map_nuscenes(self):
         map_geom_org_dic = {}
-
+        for vec_class in self.vec_classes:
+            if vec_class == 'boundary':  # road_segment
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
+                    self.patch_box, self.patch_angle, ['road_segment'])
+            elif vec_class == 'lane':  # road_divider, lane_divider
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
+                    self.patch_box, self.patch_angle, ['lane', 'lane_connector'])
+            elif vec_class == 'divider':  # road_divider, lane_divider
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
+                    self.patch_box, self.patch_angle, ['road_divider', 'lane_divider']) #, 'lane_divider'])
+                # map_geom_org_dic['lane'] = self.get_geom._get_lane_divider(map_geom_org_dic['lane'])
+            elif vec_class == 'ped_crossing':  # oed_crossing
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
+                    self.patch_box, self.patch_angle, ['ped_crossing'])
+            elif vec_class == 'centerline':  # lane, connector
+                map_geom_org_dic[vec_class] = self.get_geom._get_centerline(map_geom_org_dic['lane'])
+                map_geom_org_dic = self.get_geom.get_centerline_line(map_geom_org_dic)
+            elif vec_class == 'agent':
+                agents_trajectory = get_nuscenes_trajectory(
+                    self.nusc, self.info['token'], ['vehicle'], type='geom')
+                map_geom_org_dic[vec_class] = add_tra_to_vecmap(
+                    agents_trajectory, self.map_explorer, self.patch_box, self.patch_angle)
+                map_geom_org_dic = get_agent_info(map_geom_org_dic)
+            else:
+                raise ValueError(f'WRONG vec_class: {vec_class}')
+        return map_geom_org_dic
+    
+    def get_map_av2(self):
+        map_geom_org_dic = {}
+        for vec_class in self.vec_classes:
+            if vec_class == 'ped_crossing':  # oed_crossing
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_ped_crossing(
+                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
+            elif vec_class == 'boundary':  # road_segment
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_boundary(
+                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
+            elif vec_class == 'lane':  # lane, connector
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_lane(
+                    self.avm, self.patch_box, self.patch_angle)
+            elif vec_class == 'centerline':  # lane, connector
+                map_geom_org_dic = self.get_geom.extract_local_centerline(
+                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
+            elif vec_class == 'divider':  # road_divider, lane_divider
+                map_geom_org_dic = self.get_geom.extract_local_divider(
+                    self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
+            elif vec_class == 'agent':
+                map_geom_org_dic[vec_class] = {}  # TODO
+            else:
+                raise ValueError(f'WRONG vec_class: {vec_class}')
+        return map_geom_org_dic
+    
+    def get_map_mme(self):
+        ns_map = NuScenesMap4MME(self.nusc_maps.dataroot, self.nusc_maps.map_name)
+        ns_mapex = self.map_explorer(ns_map)
+        self.get_geom = GetMapLayerGeom(
+            self.nusc, ns_mapex, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
+        map_geom_org_dic = self.get_geom.gen_vectorized_samples_by_pt_json()
+        
+        return map_geom_org_dic
+    
+    def get_map_ann(self, pertube_vers):
         # get geom for layers and transfer linestring geom to instance
-        if self.info['dataset'] == 'av2':    ## AV2 
-            for vec_class in self.vec_classes:
-                if vec_class == 'ped_crossing':  # oed_crossing
-                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_ped_crossing(
-                        self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
-                elif vec_class == 'boundary':  # road_segment
-                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_boundary(
-                        self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
-                elif vec_class == 'lane':  # lane, connector
-                    map_geom_org_dic[vec_class] = self.get_geom.extract_local_lane(
-                        self.avm, self.patch_box, self.patch_angle)
-                elif vec_class == 'centerline':  # lane, connector
-                    map_geom_org_dic = self.get_geom.extract_local_centerline(
-                        self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
-                elif vec_class == 'divider':  # road_divider, lane_divider
-                    map_geom_org_dic = self.get_geom.extract_local_divider(
-                        self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
-                elif vec_class == 'agent':
-                    map_geom_org_dic[vec_class] = {}  # TODO
-                else:
-                    raise ValueError(f'WRONG vec_class: {vec_class}')
-        elif self.info['dataset'] == 'nuscenes': ## NuScenes
-            for vec_class in self.vec_classes:
-                if vec_class == 'boundary':  # road_segment
-                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                        self.patch_box, self.patch_angle, ['road_segment'])
-                elif vec_class == 'lane':  # road_divider, lane_divider
-                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                        self.patch_box, self.patch_angle, ['lane', 'lane_connector'])
-                elif vec_class == 'divider':  # road_divider, lane_divider
-                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                        self.patch_box, self.patch_angle, ['road_divider', 'lane_divider']) #, 'lane_divider'])
-                    # map_geom_org_dic['lane'] = self.get_geom._get_lane_divider(map_geom_org_dic['lane'])
-                elif vec_class == 'ped_crossing':  # oed_crossing
-                    map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                        self.patch_box, self.patch_angle, ['ped_crossing'])
-                elif vec_class == 'centerline':  # lane, connector
-                    map_geom_org_dic[vec_class] = self.get_geom._get_centerline(map_geom_org_dic['lane'])
-                    map_geom_org_dic = self.get_geom.get_centerline_line(map_geom_org_dic)
-                elif vec_class == 'agent':
-                    agents_trajectory = get_nuscenes_trajectory(
-                        self.nusc, self.info['token'], ['vehicle'], type='geom')
-                    map_geom_org_dic[vec_class] = add_tra_to_vecmap(
-                        agents_trajectory, self.map_explorer, self.patch_box, self.patch_angle)
-                    map_geom_org_dic = get_agent_info(map_geom_org_dic)
-                else:
-                    raise ValueError(f'WRONG vec_class: {vec_class}')
+        if self.info['dataset'] == 'nuscenes':
+            self.info['map_geom_org_dic'] = self.get_map_nuscenes()
+        elif self.info['dataset'] == 'av2':
+            self.info['map_geom_org_dic'] = self.get_map_av2()
         elif self.info['dataset'] == 'mme':
-            ns_map = NuScenesMap4MME(self.nusc_maps.dataroot, self.nusc_maps.map_name)
-            ns_mapex = NuScenesMapExplorer(ns_map)
-            self.get_geom = GetMapLayerGeom(
-                self.nusc, ns_mapex, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
-            map_geom_org_dic = self.get_geom.gen_vectorized_samples_by_pt_json()
+            self.info['map_geom_org_dic'] = self.get_map_mme()
         else:
             sys.exit('wrong dataset')
-    
-        self.info['map_geom_org_dic'] = map_geom_org_dic
         
         self.info = get_vect_map(self.nusc, self.nusc_maps, self.map_explorer, pertube_vers, self.info, self.vis_switch, self.visual, self.map_path)
         
