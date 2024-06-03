@@ -6,7 +6,7 @@ import mmcv
 import numpy as np
 from nuscenes.eval.common.utils import Quaternion
 from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
-from .data_reading import get_vec_map
+from .map_reading import get_vec_map
 from ..utils import *
 
 
@@ -189,8 +189,7 @@ def _fill_trainval_infos(nusc,
                          out_type,
                          max_sweeps=10,
                          point_cloud_range=[-15.0, -30.0, -10.0, 15.0, 30.0, 10.0],
-                         vis=False,
-                         diy=False):
+                         vis=False):
     """Generate the train/val infos from the raw data.
 
     Args:
@@ -285,8 +284,8 @@ def _fill_trainval_infos(nusc,
                 break
         info['sweeps'] = sweeps
         # obtain annotation
-        info = obtain_vectormap(
-            nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=vis, diy=diy)
+        info = _obtain_vectormap(
+            nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=vis)
         # info = obtain_perturb_vectormap(nusc_maps, map_explorer, info, point_cloud_range)
 
         if sample['scene_token'] in train_scenes:
@@ -297,7 +296,7 @@ def _fill_trainval_infos(nusc,
     return train_nusc_infos, val_nusc_infos
 
 
-def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=False, diy=False):
+def _obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pertube_vers, out_type, out_path, vis=False):
     lidar2ego = np.eye(4)
     lidar2ego[:3, :3] = Quaternion(info['lidar2ego_rotation']).rotation_matrix
     lidar2ego[:3, 3] = info['lidar2ego_translation']
@@ -314,8 +313,8 @@ def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, per
     location = info['map_location']
 
     info['dataset'] = 'nuscenes'
-    gma = get_vec_map(info, nusc, nusc_maps[location], map_explorer[location],
-                      lidar2global_translation, lidar2global_rotation, point_cloud_range, out_path, out_type, vis=vis, diy=diy)
+    gma = get_vec_map(info, nusc_maps[location], map_explorer[location], out_path, lidar2global_translation, lidar2global_rotation,
+                      point_cloud_range, out_type, nusc=nusc, vis=vis)
     info = gma.get_map_ann(pertube_vers)
 
     return info
@@ -323,13 +322,13 @@ def obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, per
 
 def create_nuscenes_infos(root_path,
                           out_path,
-                          info_prefix,
-                          out_type,
+                          out_type='json',
+                          pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
+                          info_prefix='nuscenes',
                           pertube_vers=[],
                           version='v1.0-trainval',
                           max_sweeps=10,
-                          vis=False,
-                          diy=False):
+                          vis=False):
     """Create info file of nuscene dataset.
 
     Given the raw data, generate its related info file in pkl format.
@@ -395,29 +394,27 @@ def create_nuscenes_infos(root_path,
             len(train_scenes), len(val_scenes)))
 
     train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis, diy=diy)
-    ## set patch_size to 60x120(30x60(default))
-    # train_nusc_infos, val_nusc_infos = _fill_trainval_infos(
-    #     nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, max_sweeps=max_sweeps, point_cloud_range=[-30,-60,-10,30,60,10])
+        nusc, nusc_can_bus, nusc_maps, map_explorer, train_scenes, pertube_vers, out_path, out_type, max_sweeps=max_sweeps, vis=vis, point_cloud_range=pc_range)
 
-    metadata = dict(version=version)
-    if test:
-        print('test sample: {}'.format(len(train_nusc_infos)))
-        data = dict(infos=train_nusc_infos, metadata=metadata)
-        info_path = osp.join(out_path,
-                             '{}_map_infos_temporal_test.pkl'.format(info_prefix))
-        mmcv.dump(data, info_path)
-    else:
-        print('train sample: {}, val sample: {}'.format(
-            len(train_nusc_infos), len(val_nusc_infos)))
-        data = dict(infos=train_nusc_infos, metadata=metadata)
-        info_path = osp.join(out_path,
-                             '{}_map_infos_temporal_train.pkl'.format(info_prefix))
-        mmcv.dump(data, info_path)
-        data['infos'] = val_nusc_infos
-        info_val_path = osp.join(out_path,
-                                 '{}_map_infos_temporal_val.pkl'.format(info_prefix))
-        mmcv.dump(data, info_val_path)
+    if out_type == 'pkl':
+        metadata = dict(version=version)
+        if test:
+            print('test sample: {}'.format(len(train_nusc_infos)))
+            data = dict(infos=train_nusc_infos, metadata=metadata)
+            info_path = osp.join(out_path,
+                                '{}_map_infos_temporal_test.pkl'.format(info_prefix))
+            mmcv.dump(data, info_path)
+        else:
+            print('train sample: {}, val sample: {}'.format(
+                len(train_nusc_infos), len(val_nusc_infos)))
+            data = dict(infos=train_nusc_infos, metadata=metadata)
+            info_path = osp.join(out_path,
+                                '{}_map_infos_temporal_train.pkl'.format(info_prefix))
+            mmcv.dump(data, info_path)
+            data['infos'] = val_nusc_infos
+            info_val_path = osp.join(out_path,
+                                    '{}_map_infos_temporal_val.pkl'.format(info_prefix))
+            mmcv.dump(data, info_val_path)
 
 
 parser = argparse.ArgumentParser(description='Data converter arg parser')

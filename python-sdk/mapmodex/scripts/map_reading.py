@@ -12,7 +12,6 @@ from ..utils import *
 
 class GetMapLayerGeom(object):
     def __init__(self,
-                 nusc,
                  map_explorer,
                  patch_box=(0,0,60,30),
                  patch_angle=0,
@@ -25,7 +24,6 @@ class GetMapLayerGeom(object):
                  contour_classes=['road_segment'],  # , 'lane'],
                  centerline_classes=['lane_connector', 'lane']):
         super().__init__()
-        self.nusc = nusc
         self.map_explorer = map_explorer
         self.vec_classes = map_classes
         self.line_classes = line_classes
@@ -472,7 +470,25 @@ class GetMapLayerGeom(object):
 
 # main function
 class get_vec_map():
-    def __init__(self, info, nusc, nusc_maps, map_explorer, e2g_translation, e2g_rotation, pc_range, out_path, out_type, avm=None, vis=True, diy=False):
+    """transfor original data from map database to vectory map, perturbation is opitional."""
+    def __init__(self, info, nusc_maps, map_explorer, out_path, e2g_translation=None, e2g_rotation=None, pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
+                 out_type='json', nusc=None, avm=None, vis=True, mme=False):
+        """initialization
+
+        Args:
+            info (dict): Information from the original map
+            nusc_maps (NuScenesMap): Dataset class in the nuScenes map dataset. 
+            map_explorer (NuScenesMapExplorer): Dataset class in the nuScenes map dataset explorer.
+            out_path (str): output path
+            e2g_translation (_type_, optional): The conversion relationship between the agent's current coordinates and the global coordinates. Defaults to None.
+            e2g_rotation (_type_, optional): The conversion relationship between the agent's current angle and the global angle. Defaults to None.
+            pc_range (list, optional): patch box size(3D). Defaults to [-30.0, -15.0, -5.0, 30.0, 15.0, 3.0].
+            out_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
+            nusc (NuScenesd, optional): Dataset class in the nuScenes dataset. Defaults to None.
+            avm (ArgoverseStaticMap, optional): Dataset class in the Argoverse 2 dataset. Defaults to None.
+            vis (bool, optional): visulization. Defaults to True.
+            mme (bool, optional): map dataset from MapModEX. Defaults to False.
+        """
         self.nusc = nusc
         self.nusc_maps = nusc_maps
         self.map_explorer = map_explorer
@@ -482,14 +498,15 @@ class get_vec_map():
         self.e2g_rotation = e2g_rotation
         self.pc_range = pc_range
         self.avm = avm
-        self.diy=diy
+        self.output_type = out_type
+        self.mme = mme
 
         self.vec_classes = ['boundary', 'lane', 'divider',
                             'ped_crossing', 'centerline', 'agent']
         
         # set the final plot and saved layers
         self.info['order'] = ['boundary', 'divider', 'ped_crossing', 'centerline'] #, 'agent']
-        self.get_patch_info()
+        self._get_patch_info()
 
         vis_path = os.path.join(out_path, 'visualization')
         self.visual = RenderMap(self.info, vis_path, vis)
@@ -500,14 +517,16 @@ class get_vec_map():
         else:
             self.map_path = None
 
-    def get_patch_info(self):
+    def _get_patch_info(self):
         patch_h = self.pc_range[4]-self.pc_range[1]
         patch_w = self.pc_range[3]-self.pc_range[0]
         self.patch_size = (patch_h, patch_w)
 
-        map_pose = self.e2g_translation[:2]
-        self.patch_box = (map_pose[0], map_pose[1],
-                          self.patch_size[0], self.patch_size[1])
+        if self.e2g_translation is not None:
+            map_pose = self.e2g_translation[:2]
+            self.patch_box = (map_pose[0], map_pose[1], self.patch_size[0], self.patch_size[1])
+        else:
+            self.patch_box = (0, 0, self.patch_size[0], self.patch_size[1])
 
         if self.avm is not None:
             rotation = Quaternion._from_matrix(self.e2g_rotation)
@@ -515,15 +534,17 @@ class get_vec_map():
             city_SE2_ego = SE3(self.e2g_rotation, self.e2g_translation)
             self.ego_SE3_city = city_SE2_ego.inverse()
         else:
-            rotation = Quaternion(self.e2g_rotation)
+            if self.e2g_rotation is not None:
+                rotation = Quaternion(self.e2g_rotation)
             self.ego_SE3_city = None
-
-        self.patch_angle = quaternion_yaw(rotation) / np.pi * 180
+        if self.e2g_rotation is not None:
+            self.patch_angle = quaternion_yaw(rotation) / np.pi * 180
+        else:
+            self.patch_angle = 0
         # map class setting
-        self.get_geom = GetMapLayerGeom(
-            self.nusc, self.map_explorer, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
+        self.get_geom = GetMapLayerGeom(self.map_explorer, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
 
-    def get_map_nuscenes(self):
+    def _get_map_nuscenes(self):
         map_geom_org_dic = {}
         for vec_class in self.vec_classes:
             if vec_class == 'boundary':  # road_segment
@@ -552,7 +573,7 @@ class get_vec_map():
                 raise ValueError(f'WRONG vec_class: {vec_class}')
         return map_geom_org_dic
     
-    def get_map_av2(self):
+    def _get_map_av2(self):
         map_geom_org_dic = {}
         for vec_class in self.vec_classes:
             if vec_class == 'ped_crossing':  # oed_crossing
@@ -576,26 +597,38 @@ class get_vec_map():
                 raise ValueError(f'WRONG vec_class: {vec_class}')
         return map_geom_org_dic
     
-    def get_map_mme(self):
-        ns_map = NuScenesMap4MME(self.nusc_maps.dataroot, self.nusc_maps.map_name)
-        ns_mapex = self.map_explorer(ns_map)
-        self.get_geom = GetMapLayerGeom(
-            self.nusc, ns_mapex, self.patch_box, self.patch_angle, self.avm, self.ego_SE3_city, self.vec_classes)
-        map_geom_org_dic = self.get_geom.gen_vectorized_samples_by_pt_json()
-        
-        return map_geom_org_dic
+    def _get_map_mme(self):
+        self.get_geom = GetMapLayerGeom(self.map_explorer, self.patch_box, self.patch_angle, map_classes=self.vec_classes,
+                                        line_classes=['divider', 'centerline', 'agent', 'boundary'])
+        map_geom_org_dic = {}
+        for vec_class in self.vec_classes:
+            if vec_class in ['boundary', 'lane', 'divider', 'ped_crossing', 'centerline', 'agent']:
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(self.patch_box, self.patch_angle, [vec_class])
+            else:
+                raise ValueError(f'WRONG vec_class: {vec_class}')
+            
+            return map_geom_org_dic
     
     def get_map_ann(self, pertube_vers):
+        """get map layers and transfor them to vectory, pertubation is optional
+
+        Args:
+            pertube_vers (list): perturbed versions, each version should be a dict with parameter_names and parameter_values.
+
+        Returns:
+            dict: infomation includ vectory map layers
+        """
         # get geom for layers and transfer linestring geom to instance
         if self.info['dataset'] == 'nuscenes':
-            self.info['map_geom_org_dic'] = self.get_map_nuscenes()
+            self.info['map_geom_org_dic'] = self._get_map_nuscenes()
         elif self.info['dataset'] == 'av2':
-            self.info['map_geom_org_dic'] = self.get_map_av2()
+            self.info['map_geom_org_dic'] = self._get_map_av2()
         elif self.info['dataset'] == 'mme':
-            self.info['map_geom_org_dic'] = self.get_map_mme()
+            self.info['map_geom_org_dic'] = self._get_map_mme()
         else:
             sys.exit('wrong dataset')
         
-        self.info = get_vect_map(self.nusc, self.nusc_maps, self.map_explorer, pertube_vers, self.info, self.vis_switch, self.visual, self.map_path)
+        self.info = get_vect_map(self.nusc_maps, self.map_explorer, pertube_vers, self.info, self.visual, self.vis_switch, self.map_path,
+                                 self.output_type, self.mme)
         
         return self.info

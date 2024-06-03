@@ -46,7 +46,7 @@ mme.mod_nuscenes(map_version_nusc:str)
 
 ## Results
 
-Our model achieves the following performance on :
+Our model achieves the following performance:
 
 <!-- ## Support
 Please open an issue to ask your questions. -->
@@ -59,6 +59,6 @@ Please make sure to update tests as appropriate.
 <!-- ## Authors and acknowledgment -->
 
 ## License
-<!-- [MIT](https://choosealicense.com/licenses/mit/) -->
+[MIT](https://choosealicense.com/licenses/mit/)
 
 <!-- ## Tests -->

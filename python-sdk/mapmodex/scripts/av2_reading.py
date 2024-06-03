@@ -14,7 +14,7 @@ from shapely.strtree import STRtree
 import numpy as np
 from shapely.geometry import CAP_STYLE, JOIN_STYLE
 from scipy.spatial import distance
-from .data_reading import get_vec_map
+from .map_reading import get_vec_map
 import warnings
 from nuscenes.nuscenes import NuScenes
 
@@ -39,14 +39,15 @@ FAIL_LOGS = [
 ]
 
 
-def create_av2_infos_mp(root_path,
-                        info_prefix,
-                        pertube_vers,
-                        dest_path=None,
-                        split='train',
-                        num_multithread=64,
-                        pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
-                        vis=False):
+def create_av2_infos(root_path,
+                    pertube_vers,
+                    info_prefix='av2',
+                    dest_path=None,
+                    split='train',
+                    num_multithread=64,
+                    output_type='json',
+                    pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
+                    vis=False):
     """Create info file of av2 dataset.
 
     Given the raw data, generate its related info file in pkl format.
@@ -89,30 +90,31 @@ def create_av2_infos_mp(root_path,
 
     results = []
     for log_id in mmcv.track_iter_progress(log_ids):
-        result = get_data_from_logid(
-            log_id, loader=loader, data_root=root_path, pertube_vers=pertube_vers, pc_range=pc_range, vis=vis)
+        result = _get_data_from_logid(
+            log_id, loader=loader, data_root=root_path, pertube_vers=pertube_vers, pc_range=pc_range, output_type=output_type,vis=vis)
         results.append(result)
 
-    samples = []
-    discarded = 0
-    sample_idx = 0
-    for _samples, _discarded in results:
-        for i in range(len(_samples)):
-            _samples[i]['sample_idx'] = sample_idx
-            sample_idx += 1
-        samples += _samples
-        discarded += _discarded
+    if output_type == 'pkl':
+        samples = []
+        discarded = 0
+        sample_idx = 0
+        for _samples, _discarded in results:
+            for i in range(len(_samples)):
+                _samples[i]['sample_idx'] = sample_idx
+                sample_idx += 1
+            samples += _samples
+            discarded += _discarded
 
-    sdb_logger.setLevel(prev_level)
-    print(f'{len(samples)} available samples, {discarded} samples discarded')
+        sdb_logger.setLevel(prev_level)
+        print(f'{len(samples)} available samples, {discarded} samples discarded')
 
-    print('collected in {}s'.format(time.time()-start_time))
-    infos = dict(samples=samples)
+        print('collected in {}s'.format(time.time()-start_time))
+        infos = dict(samples=samples)
 
-    info_path = osp.join(dest_path,
-                         '{}_map_infos_{}.pkl'.format(info_prefix, split))
-    print(f'saving results to {info_path}')
-    mmcv.dump(infos, info_path)
+        info_path = osp.join(dest_path,
+                            '{}_map_infos_{}.pkl'.format(info_prefix, split))
+        print(f'saving results to {info_path}')
+        mmcv.dump(infos, info_path)
 
 
 def get_divider(avm):
@@ -139,10 +141,11 @@ def get_ped(avm):
     return ped_list
 
 
-def get_data_from_logid(log_id,
+def _get_data_from_logid(log_id,
                         loader,
                         data_root,
                         pertube_vers,
+                        output_type='json',
                         pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
                         vis=False):
     samples = []
@@ -207,8 +210,8 @@ def get_data_from_logid(log_id,
 
         info["scene_token"] = str(ts)
         info['dataset'] = 'av2'
-        gma = get_vec_map(info, ns, ns_map, ns_map_exp, e2g_translation,
-                          e2g_rotation, pc_range, avm, vis_path=vis_path, vis=vis)
+        gma = get_vec_map(info, ns_map, ns_map_exp, e2g_translation,
+                          e2g_rotation, pc_range, avm, out_type=output_type, vis_path=vis_path, vis=vis)
         info = gma.get_map_ann(pertube_vers)
 
         samples.append(info)

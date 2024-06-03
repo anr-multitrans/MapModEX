@@ -862,10 +862,10 @@ def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=N
 
     return map_dict
 
-def affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact):
+def affine_transfer_4_add_centerline(new_lane, xoff=0, yoff=0, angle=0, origin_rot='center', xfact=0, yfact=0, origin_sca='center'):
     new_lane = affinity.translate(new_lane, xoff, yoff) #shift
-    new_lane = affinity.rotate(new_lane, angle, origin) #rotate
-    new_lane = affinity.scale(new_lane, xfact, yfact, origin=origin) #flip
+    new_lane = affinity.rotate(new_lane, angle, origin_rot) #rotate
+    new_lane = affinity.scale(new_lane, xfact, yfact, origin=origin_sca) #flip
     
     return new_lane
 
@@ -915,7 +915,7 @@ def random_select_element(all_elements, num_elements):
     if isinstance(all_elements, dict):
         keys = list(all_elements.keys())
         selected_keys = random.sample(keys, num_elements)
-        return {key: all_elements[key] for key in selected_keys}
+        return [all_elements[key] for key in selected_keys]
     elif isinstance(all_elements, list):
         return random.sample(all_elements, num_elements)
 
@@ -935,7 +935,7 @@ class NuScenesMap4MME(NuScenesMap):
         
         # super(NuScenesMap4MME, self).__init__(dataroot, map_name)
         super().__init__(dataroot, map_name)
-        self.non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light', 'centerline']
+        self.non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light', 'centerline', 'boundary', 'agent', 'divider']
         
         self.boundary = self._load_layer('boundary')
         self.divider = self._load_layer('divider')

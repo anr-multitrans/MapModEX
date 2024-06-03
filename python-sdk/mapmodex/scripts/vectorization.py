@@ -10,9 +10,9 @@ from .peturbation import MapTransform
 from ..utils import *
 
 
-class VectorizedLocalMap(object):
+class VectorizedMap(object):
+    """transform geometry map layers to vectory"""
     def __init__(self,
-                 nusc,
                  nusc_map,
                  map_explorer,
                  patch_box=(0,0,60,30),
@@ -20,13 +20,28 @@ class VectorizedLocalMap(object):
                  avm=None,
                  ego_SE3_city=None,
                  map_classes=['boundary', 'divider', 'ped_crossing',
-                              'centerline', 'lane', 'agent'],  # the layers needed
+                              'centerline', 'lane', 'agent'],
                  line_classes=['road_divider', 'lane_divider'],
                  ped_crossing_classes=['ped_crossing'],
-                 contour_classes=['road_segment'],  # , 'lane'],
-                 centerline_classes=['lane_connector', 'lane']):
+                 contour_classes=['road_segment'],
+                 centerline_classes=['lane_connector', 'lane'],
+                 mme=False):
+        """initialization
+
+        Args:
+            nusc_map (NuScenesMap): Dataset class in the nuScenes map dataset. 
+            map_explorer (NuScenesMapExplorer): Dataset class in the nuScenes map dataset explorer.
+            patch_box (tuple, optional): patch box[x,y,hight,width]. Defaults to (0,0,60,30).
+            patch_angle (int, optional): patch angle. Defaults to 0.
+            avm (ArgoverseStaticMap, optional): Dataset class in the Argoverse 2 dataset. Defaults to None.
+            ego_SE3_city (optional): Used for the conversion between AV2's current seat position and the global position. Defaults to None.
+            map_classes (list, optional): Unified map layer types for perturbations. Defaults to ['boundary', 'divider', 'ped_crossing', 'centerline', 'lane', 'agent'].
+            ped_crossing_classes (list, optional): map layer types belonging to the crosswalk. Defaults to ['ped_crossing'].
+            contour_classes (list, optional): map layer types that belong to boundaries. Defaults to ['road_segment'].
+            centerline_classes (list, optional): The type of map layer used to generate the path. Defaults to ['lane_connector', 'lane'].
+            mme (bool, optional): map dataset from MapModEX. Defaults to False.
+        """
         super().__init__()
-        self.nusc = nusc
         self.nusc_map = nusc_map
         self.map_explorer = map_explorer
         self.vec_classes = map_classes
@@ -40,6 +55,7 @@ class VectorizedLocalMap(object):
         self.delete = False
         self.avm = avm
         self.ego_SE3_city = ego_SE3_city
+        self.mme = mme
 
         # delete_record = delet_record(
         #     map_explorer, pertu_nusc_infos)
@@ -87,7 +103,17 @@ class VectorizedLocalMap(object):
             self.delete = True
 
     def gen_vectorized_samples(self, map_geom_dic):
-        '''get transformed gt map layers'''
+        """transfor map layers to instance that can be visulized
+
+        Args:
+            map_geom_dic (dict): geomatry map layer
+
+        Raises:
+            ValueError: if there is wrong layer type
+
+        Returns:
+            dict: geomatry map instance
+        """
         map_ins_org_dict = {}
         
         map_ins_org_dict = make_dict(self.vec_classes)
@@ -97,10 +123,10 @@ class VectorizedLocalMap(object):
                 for v in map_geom_dic[vec_class].values():
                     map_ins_org_dict[vec_class].append(v['geom'])
             elif vec_class == 'boundary':
-                map_ins_org_dict[vec_class] = self.poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
+                map_ins_org_dict[vec_class] = self._poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
             elif vec_class == 'divider':
                 # take from 'divier' and 'lane', merge overlaped and delete duplicated
-                map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_dic) 
+                map_ins_org_dict[vec_class] = self._line_geoms_to_instances(map_geom_dic) 
             elif vec_class == 'ped_crossing':
                 continue
             elif vec_class == 'lane':
@@ -175,7 +201,7 @@ class VectorizedLocalMap(object):
 
         return geoms_dict
 
-    def line_geoms_to_instances(self, geom_dict):
+    def _line_geoms_to_instances(self, geom_dict):
         line_geom_list = {}
 
         if 'divider' in geom_dict.keys():
@@ -257,12 +283,13 @@ class VectorizedLocalMap(object):
 
         return one_type_line_geom_to_instances(results)
 
-    def poly_geoms_to_instances(self, polygon_geom):
+    def _poly_geoms_to_instances(self, polygon_geom, mme=False):
         polygons = []
         
-        if 'boundary' in polygon_geom.keys():
-            for road_dic in polygon_geom['boundary'].values():
-                polygons.append(road_dic['geom'])
+        if not self.mme:
+            if 'boundary' in polygon_geom.keys():
+                for road_dic in polygon_geom['boundary'].values():
+                    polygons.append(road_dic['geom'])
 
         if 'lane' in polygon_geom.keys():
             for lane_dic in polygon_geom['lane'].values():
@@ -302,8 +329,24 @@ class VectorizedLocalMap(object):
         return one_type_line_geom_to_instances(results)
 
 
-def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, visual, map_path):
-    vector_map = VectorizedLocalMap(nusc, nusc_maps, map_explorer)
+def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch=False, map_path='', output_type='json', mme=False):
+    """tranform orgnaized map layers to vetory, perturbat if necessary.
+
+    Args:
+        nusc_maps (NuScenesMap): Dataset class in the nuScenes map dataset.
+        map_explorer (NuScenesMapExporer): Dataset class in the nuScenes map dataset explorer.
+        pertube_vers (list): perturbed versions, each version should be a dict with parameter_names and parameter_values.
+        info (dcit): information from the original map 
+        vis_switch (bool): visulization switch
+        visual (RenderMap): class in map visualization
+        map_path (str): output path for saving map data
+        output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
+        mme (bool, optional): map dataset from MapModEX. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+    vector_map = VectorizedMap(nusc_maps, map_explorer, mme=mme)
     map_trans = MapTransform(map_explorer, info['map_geom_org_dic'], vector_map, visual)    
 
     for map_v in pertube_vers:
@@ -315,7 +358,7 @@ def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, 
         map_trans.ann_name = ann_name
         
         ## geom level pertubation
-        map_trans.pertub_geom(copy.deepcopy(info['map_geom_org_dic']))
+        map_trans.perturb_geom_layer(copy.deepcopy(info['map_geom_org_dic']))
         
         ## crop the ready-show vectorized geom by patch_box.
         trans_dic = {}
@@ -325,7 +368,7 @@ def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, 
         trans_dic['map_ins_dic_patch'] = map_ins_dict
         
         ## vectetry level pertubation
-        map_trans.perturb_vect()
+        map_trans.perturb_vect_map()
         map_vect_pt_dic = map_trans.vect_dict
             
         if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
@@ -354,7 +397,7 @@ def get_vect_map(nusc, nusc_maps, map_explorer, pertube_vers, info, vis_switch, 
         for vec_class, pt_geom_dic in map_vect_pt_dic.items():
             map_geom_dict[vec_class] = get_vect_in_patch(pt_geom_dic, vector_map.patch_box)
         
-        if map_path is not None:
+        if output_type == 'json':
             # keep the instance part only in the patch.
             map_geom_dict = {}
             for vec_class, pt_geom_dic in map_trans.geom_dict_for_json.items():

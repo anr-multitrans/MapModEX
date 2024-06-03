@@ -519,7 +519,6 @@ def vis_contours_local(contours, show_layers = None, patch_box=[0, 0, 62, 32], s
 
     plt.close()
 
-
 def show_img(X):
     plt.imshow(X, interpolation='nearest')
     plt.show()
