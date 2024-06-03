@@ -10,39 +10,39 @@ from ..utils import *
 
 
 class PerturbParameters():
-    def __init__(self, pt_name=None,
-                 # [switch, proportion, parameter]
-                 # ped_crossing perturbation
-                 del_ped=[0, 0, None],  # delete ped_crossing
-                 # shift ped_crossing in its road_segment, shifted by offsets along each dimension[x, y]
-                 shi_ped=[0, 0, [0, 0]],
-                 add_ped=[0, 0, None],  # add ped_crossing in a road_segment
-                 # dividers perturbation
-                 del_div=[0, 0, None],  # delete divider
-                 # shift divider, shifted by offsets along each dimension[x, y]
-                 shi_div=[0, 0, [0, 0]],
-                 add_div=[0, 0, None],  # add divider TODO
+    def __init__(self,
+                 pt_name=None, # perturbation version name
+                 
+                 ## [switch, proportion, parameter]
+                 # centerline(lane+divider)
                  del_lan=[0, 0, None],
                  add_lan=[0,0,None],
                  wid_lan=[0, 0, None],
+                 aff_rot_lan=[0, 0, None],
+                 aff_fli_pat=[0, 0, None],
+                 aff_shi_pat=[0, 0, None],
+                 
+                 # ped_crossing perturbation
+                 del_ped=[0, 0, None],  # delete ped_crossing
+                 add_ped=[0, 0, None],  # add ped_crossing in a road_segment
+                 shi_ped=[0, 0, [0, 0]],
+                 
+                 # dividers perturbation
+                 del_div=[0, 0, None],  # delete divider
+                 
                  # boundray perturabtion
-                 del_bou=[0, 0, None],  # delete lane
-                 # shift lane, shifted by offsets along each dimension[x, y]
-                 shi_bou=[0, 0, [0, 0]],
-                 add_bou=[0, 0, None],  # add boundray TODO
                  wid_bou=[0, 0, None],
+                 
                  # patch perturbation
-                 aff_tra_pat=[0, None, [1, 0, 0, 1, 0, 0]],  #affine_transform:[a,b,d,e,xoff,yoff], x'=a*x+b*y+xoff,y'=d*x+e*y+yoff
                  rot_pat=[0, None, [0, [0, 0]]],  # rotate the patch
-                 sca_pat=[0, None, [1, 1]],  # scale the patch
                  ske_pat=[0, None, [0, 0, (0, 0)]],  # skew the patch
                  shi_pat=[0, None, [0, 0]],  # translate: shift the patch
-                 # Horizontal, Vertical, and Inclination distortion amplitude
-                 def_pat_tri=[0, None, [0, 0, 0]],
-                 # gaussian mean and standard deviation
-                 def_pat_gau=[0, None, [0, 1]],
-                 # gaussian mean and standard deviation
-                 noi_pat_gau=[0, None, [0, 1]],
+                 
+                 def_pat_tri=[0, None, [0, 0, 0]], # Horizontal, Vertical, and Inclination distortion amplitude
+                 def_pat_gau=[0, None, [0, 1]], # gaussian mean and standard deviation
+                 noi_pat_gau=[0, None, [0, 1]], # gaussian mean and standard deviation
+                 
+                 ## other pertubation setting
                  diy=False,
                  truncate=False,
                  # Interpolation
@@ -56,18 +56,14 @@ class PerturbParameters():
         self.shi_ped = shi_ped
         self.add_ped = add_ped
         self.del_div = del_div
-        self.shi_div = shi_div
-        self.add_div = add_div
         self.del_lan = del_lan
         self.wid_lan = wid_lan
         self.add_lan = add_lan
-        self.del_bou = del_bou
-        self.shi_bou = shi_bou
-        self.add_bou = add_bou
+        self.aff_rot_lan = aff_rot_lan
+        self.aff_fli_pat = aff_fli_pat
+        self.aff_shi_pat = aff_shi_pat
         self.wid_bou = wid_bou
-        self.aff_tra_pat = aff_tra_pat
         self.rot_pat = rot_pat
-        self.sca_pat = sca_pat
         self.ske_pat = ske_pat
         self.shi_pat = shi_pat
         self.def_pat_tri = def_pat_tri
@@ -76,7 +72,6 @@ class PerturbParameters():
 
         self.diy = diy
         self.truncate = truncate
-        
         self.int_num = int_num
         self.int_ord = int_ord
         self.int_sav = int_sav
@@ -772,7 +767,7 @@ class MapTransform:
             self.add_centerline()
             self.truncate_and_save('geom', '2_add_lane')
         
-        if any(getattr(self.tran_args, pat)[0] for pat in ['aff_tra_pat', 'rot_pat', 'sca_pat', 'ske_pat', 'shi_pat']):
+        if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'ske_pat', 'shi_pat']):
             self.affine_transform()
             self.truncate_and_save('geom', '3_affine_transform')
         

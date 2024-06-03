@@ -1,9 +1,8 @@
 import copy
 import numpy as np
-from nuscenes.map_expansion.map_api import NuScenesMapExplorer
 
-from shapely import affinity, ops
-from shapely.geometry import MultiLineString, MultiPolygon, Polygon, box, LineString
+from shapely import ops
+from shapely.geometry import MultiLineString, MultiPolygon, box, LineString
 
 from .peturbation import MapTransform
 
@@ -94,7 +93,7 @@ class VectorizedLocalMap(object):
         map_ins_org_dict = make_dict(self.vec_classes)
         # transfer non linestring geom to instance
         for vec_class in map_geom_dic.keys():
-            if vec_class in ['lane', 'centerline', 'agent']:
+            if vec_class in ['centerline', 'agent']:
                 for v in map_geom_dic[vec_class].values():
                     map_ins_org_dict[vec_class].append(v['geom'])
             elif vec_class == 'boundary':
@@ -104,6 +103,11 @@ class VectorizedLocalMap(object):
                 map_ins_org_dict[vec_class] = self.line_geoms_to_instances(map_geom_dic) 
             elif vec_class == 'ped_crossing':
                 continue
+            elif vec_class == 'lane':
+                for v in map_geom_dic[vec_class].values():
+                    if v['from'] == 'lane_connector':
+                        continue
+                    map_ins_org_dict[vec_class].append(v['geom'])
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
 

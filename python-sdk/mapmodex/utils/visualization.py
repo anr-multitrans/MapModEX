@@ -26,6 +26,8 @@ plt.style.use('seaborn-whitegrid')
 
 colors_plt = {'divider': '#808000', 'ped_crossing': '#000080',
               'boundary': '#008000', 'centerline': 'mistyrose', 'agent': 'red', 'lane': 'blue'}
+linewidth_plt = {'divider': 1, 'ped_crossing': 1,
+              'boundary': 1, 'centerline': 2, 'agent': 1, 'lane': 1}
 clipping_box = box(-15, -30, 15, 30)
 
 def plot_geometry(ax, geometry, index=None, color='blue', linewidth=1, fontsize=12):
@@ -458,7 +460,6 @@ class RenderMap:
         if self.switch:
 
             plt.figure(figsize=(2, 4))
-            # plt.figure
             plt.xlim(-self.patch_box[3]/2, self.patch_box[3]/2)
             plt.ylim(-self.patch_box[2]/2, self.patch_box[2]/2)
             plt.axis('off')
