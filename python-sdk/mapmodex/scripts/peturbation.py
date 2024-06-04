@@ -328,68 +328,6 @@ class MapTransform:
                     # else:
                     #     ins_v['geom'] = geom
 
-    def creat_ped_polygon(self, road_segment_token=None): #FIXME
-        min_x, min_y, max_x, max_y = self.map_explorer.map_api.get_bounds(
-            'road_segment', road_segment_token)
-
-        x_range = max_x - min_x
-        y_range = max_y - min_y
-
-        if max([x_range, y_range]) <= 4:
-            new_polygon = self.map_explorer.map_api.extract_polygon(
-                self.map_explorer.map_api.get('road_segment', road_segment_token)['polygon_token'])
-        else:
-            if x_range > y_range:
-                rand = random.uniform(min_x, max_x - 4)
-                left_bottom = Point([rand, min_y])
-                left_top = Point([rand, max_y])
-                right_bottom = Point([rand + 4, min_y])
-                right_top = Point([rand + 4, max_y])
-            else:
-                rand = random.uniform(min_y, max_y - 4)
-                left_bottom = Point([min_x, rand])
-                left_top = Point([min_x, rand + 4])
-                right_bottom = Point([max_x, rand])
-                right_top = Point([max_x, rand + 4])
-
-            new_polygon = Polygon(
-                [left_top, left_bottom, right_bottom, right_top])
-
-        return new_polygon
-
-    def _creat_boundray(self, bd):
-        # Get the center point of the boundary and draw a circle with this center point
-        center_point = bd.interpolate(bd.length / 2)
-        c = center_point.buffer(3.7).boundary
-        # Get the intersection point of the boundary and the circle
-        bi = c.intersection(bd)
-
-        # Determine the starting point of the new boundary based on the number of intersection points
-        if bi.geom_type == 'MultiPoint':
-            pt_1 = np.array(bi.geoms[0].coords, float)
-            pt_2 = np.array(bi.geoms[-1].coords, float)
-        elif bi.geom_type == 'Point':
-            pt_1 = np.array(bi.coords, float)
-            pt_2 = None
-        else:
-            return []
-
-        limit_1 = min((np.array([[15, 30]]) - abs(pt_1)) /
-                      abs(np.array(center_point.coords)))
-        pt_bd_1 = list(list(pt_1 + limit_1*np.array(center_point.coords))[0])
-        new_b_1 = LineString([pt_bd_1, list(list(pt_1)[0])])
-
-        if pt_2 is not None:
-            limit_2 = min(
-                (np.array([[15, 30]]) - abs(pt_2)) / abs(np.array(center_point.coords)))
-            pt_bd_2 = list(
-                list(pt_2 + limit_2*np.array(center_point.coords))[0])
-            new_b_2 = LineString([pt_bd_2, list(list(pt_2)[0])])
-
-            return [new_b_1, new_b_2]
-
-        return [new_b_1]
-
     def adjust_lane_width(self):
         """Widen the boundaries of a path: the boundaries of all lanes and crosswalks connected by the center line"""
         move_distance = self.tran_args.wid_lan[2] / 2.0
@@ -486,6 +424,41 @@ class MapTransform:
 
         return instance_list, correspondence_list
 
+    def shift_ped_crossing(self):
+        if self.tran_args.diy:
+            celected_geoms = geometry_manager(self.geom_dict, 'ped_crossing', ['lane', 'centerline', 'boundary'])
+        else:
+            times = math.ceil(len(self.geom_dict['ped_crossing'].keys()) * self.tran_args.shi_ped[1])
+            if times == 0:
+                return self.geom_dict
+
+            celected_geoms = random_select_element(self.geom_dict['ped_crossing'], times)
+            
+        for ped_cro in celected_geoms:
+            if ped_cro['geom'].geom_type == 'MultiPolygon':
+                ped_cro['geom'] = unary_union(ped_cro['geom'])
+                if ped_cro['geom'].geom_type == 'MultiPolygon':
+                    print('ped_crossing is MultiPolygon and the shift is failed')
+                    continue
+            
+            if 'centerline_token' in ped_cro:
+                if len(ped_cro['centerline_token']):
+                    along_cl_token = random.choice(ped_cro['centerline_token'])
+                    along_cl = self.geom_dict['centerline'][along_cl_token]
+                    if 'lane_token' in along_cl:
+                        if len(along_cl['lane_token']):
+                            moved_ped_forward, moved_ped_backward = move_polygon_along_polyline(ped_cro['geom'], along_cl['geom'], self.tran_args.shi_ped[2])
+                            for moved_ped in moved_ped_forward, moved_ped_backward:
+                                check = 0
+                                for l_token in along_cl['lane_token']:
+                                    lane = self.geom_dict['lane'][l_token]
+                                    if moved_ped.intersects(lane['geom']):
+                                        check = 1
+                                        break
+                                if check:
+                                    self.geom_dict['ped_crossing'][ped_cro['token']]['geom'] = moved_ped
+                                    break
+        
     def zoom_layers(self, instance_list, correspondence_list, layer_name, args):
         times = math.floor(self.num_layer_elements[layer_name] * args[1])
         index_list = random.choices([i for i in range(self.num_layer_elements[layer_name])], k=times)
@@ -742,15 +715,15 @@ class MapTransform:
 
         if self.tran_args.def_pat_tri[0]:
             self.difromate_map()
-            self.truncate_and_save('vect', '6_warping_tri')
+            self.truncate_and_save('vect', '7_warping_tri')
 
         if self.tran_args.def_pat_gau[0]:
             self.guassian_warping()
-            self.truncate_and_save('vect', '7_warping_gua')
+            self.truncate_and_save('vect', '8_warping_gua')
 
         if self.tran_args.noi_pat_gau[0]:
             self.guassian_noise()
-            self.truncate_and_save('vect', '8_noiseing')
+            self.truncate_and_save('vect', '9_noiseing')
 
     def perturb_geom_layer(self, geom_dict):
         """Perturb the map geometry layer: 'centerline'-based perturbations"""
@@ -767,12 +740,16 @@ class MapTransform:
             self.affine_transform_centerline()
             self.truncate_and_save('geom', '3_affine_transform_lane')
         
+        if self.tran_args.shi_ped[0]:
+            self.shift_ped_crossing()
+            self.truncate_and_save('geom', '4_shift_ped_crossing')
+        
         if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
             self.affine_transform_patch()
-            self.truncate_and_save('geom', '4_affine_transform')
+            self.truncate_and_save('geom', '5_affine_transform_map')
         
         self.geom_dict_for_json = copy.deepcopy(self.geom_dict)
         self.geom_dict = self.vector_map.gen_vectorized_samples(self.geom_dict)
         if self.tran_args.wid_lan[0]:
             self.adjust_lane_width()
-            self.truncate_and_save('geom_ins', '5_adjust_lane')
+            self.truncate_and_save('geom_ins', '6_adjust_lane')

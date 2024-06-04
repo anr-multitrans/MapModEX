@@ -227,7 +227,7 @@ class RenderMap:
         self.canvas_min_y = 0
         self.patch_box = [0,0,60,30]
 
-    def vis_patch(self, patch_box):
+    def _vis_patch(self, patch_box):
         if self.switch:
             patch_coords = patch_box_2_coords(patch_box)
             fig, ax = self.map_api.render_map_patch(
@@ -347,7 +347,7 @@ class RenderMap:
                 ax.plot(
                     xs, ys, color=self.color_map[layer_name], alpha=alpha, label=label)
 
-    def get_map_mask(self,
+    def _get_map_mask(self,
                      geom,
                      patch_box: Optional[Tuple[float, float, float, float]],
                      patch_angle: float,
@@ -400,7 +400,7 @@ class RenderMap:
 
         return map_mask
 
-    def render_map_mask(self,
+    def _render_map_mask(self,
                         geom,
                         patch_box: Tuple[float, float, float, float],
                         patch_angle=0,  # float,
