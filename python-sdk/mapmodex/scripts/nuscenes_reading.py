@@ -229,7 +229,7 @@ def _fill_trainval_infos(nusc,
     train_nusc_infos = []
     val_nusc_infos = []
     frame_idx = 0
-    for sample in mmcv.track_iter_progress(nusc.sample):
+    for i, sample in enumerate(mmcv.track_iter_progress(nusc.sample)):
         map_location = nusc.get('log', nusc.get(
             'scene', sample['scene_token'])['log_token'])['location']
 

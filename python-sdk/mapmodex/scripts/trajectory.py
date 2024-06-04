@@ -58,7 +58,9 @@ def get_nuscenes_trajectory(nuscenes: NuScenes, sample_token, agents, seconds_of
                     else:
                         agents_tra[instance_token]['geom'] = Point(
                             tra[0][0], tra[0][1])
-                    agents_tra[instance_token]['eco'] = Point(center)
+                    
+                    if center is not None:
+                        agents_tra[instance_token]['eco'] = Point(center)
 
     return agents_tra
 
@@ -67,9 +69,10 @@ def add_tra_to_vecmap(agent_trajectory, map_exp, patch_box, patch_angle):
     agent_tra = {}
 
     for tra in agent_trajectory.values():
-        new_geom = valid_geom(tra['eco'], map_exp, patch_box, patch_angle)
-        if new_geom is not None:
-            tra['geom'] = to_patch_coord(tra['geom'], patch_angle, patch_box[0], patch_box[1])
-            agent_tra[tra['token']] = tra
+        if 'eco' in tra:
+            new_geom = valid_geom(tra['eco'], map_exp, patch_box, patch_angle)
+            if new_geom is not None:
+                tra['geom'] = to_patch_coord(tra['geom'], patch_angle, patch_box[0], patch_box[1])
+                agent_tra[tra['token']] = tra
 
     return agent_tra
