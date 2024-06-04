@@ -458,6 +458,34 @@ class MapTransform:
                                 if check:
                                     self.geom_dict['ped_crossing'][ped_cro['token']]['geom'] = moved_ped
                                     break
+
+    def shift_map(self):
+        xoff = random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1])
+        yoff = random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])
+        xy_off = [xoff, yoff]
+        for layer, vect_list in self.vect_dict.items():
+            if len(vect_list):
+                for ind, vect in enumerate(vect_list):
+                    for i in range(2):
+                        vect[:i] += xy_off[i]
+                    self.vect_dict[layer][ind] = vect
+                    
+    def rotate_map(self):
+        angle = random.randint(self.tran_args.rot_pat[2][0])
+        for layer, vect_list in self.vect_dict.items():
+            if len(vect_list):
+                for ind, vect in enumerate(vect_list):
+                    vect[:0] = vect[:0] * math.cos(angle) - vect[:1] * math.sin(angle)
+                    vect[:1] = vect[:0] * math.sin(angle) + vect[:1] * math.cos(angle)
+                    self.vect_dict[layer][ind] = vect
+    
+    def flip_map(self):
+        for layer, vect_list in self.vect_dict.items():
+            if len(vect_list):
+                for ind, vect in enumerate(vect_list):
+                    for i in range(2):
+                        vect[:i] *= self.tran_args.sca_pat[2][i]
+                    self.vect_dict[layer][ind] = vect
         
     def zoom_layers(self, instance_list, correspondence_list, layer_name, args):
         times = math.floor(self.num_layer_elements[layer_name] * args[1])
@@ -713,21 +741,34 @@ class MapTransform:
         """Perturb the map vectory layer: image algorithms acting on numpy arrays"""
         self.vect_dict = geom_to_np(self.geom_dict, inter=True)
 
+        if self.tran_args.shi_pat[0]:
+            self.shift_map()
+            self.truncate_and_save('vect', '6_shift_map')
+            
+        if self.tran_args.rot_pat[0]:
+            self.rotate_map()
+            self.truncate_and_save('vect', '7_rotate_map')
+            
+        if self.tran_args.sca_pat[0]:
+            self.flip_map() #TOFIX
+            self.truncate_and_save('vect', '8_flip_map')
+        
         if self.tran_args.def_pat_tri[0]:
             self.difromate_map()
-            self.truncate_and_save('vect', '7_warping_tri')
+            self.truncate_and_save('vect', '9_warping_tri')
 
         if self.tran_args.def_pat_gau[0]:
             self.guassian_warping()
-            self.truncate_and_save('vect', '8_warping_gua')
+            self.truncate_and_save('vect', '10_warping_gua')
 
         if self.tran_args.noi_pat_gau[0]:
             self.guassian_noise()
-            self.truncate_and_save('vect', '9_noiseing')
+            self.truncate_and_save('vect', '11_noiseing')
 
     def perturb_geom_layer(self, geom_dict):
         """Perturb the map geometry layer: 'centerline'-based perturbations"""
         self.geom_dict = geom_dict
+        
         if self.tran_args.del_lan[0]:
             self.del_centerline()
             self.truncate_and_save('geom', '1_delet_lane')
@@ -744,12 +785,12 @@ class MapTransform:
             self.shift_ped_crossing()
             self.truncate_and_save('geom', '4_shift_ped_crossing')
         
-        if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
-            self.affine_transform_patch()
-            self.truncate_and_save('geom', '5_affine_transform_map')
+        # if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
+        #     self.affine_transform_patch()
+        #     self.truncate_and_save('geom', '5_affine_transform_map')
         
         self.geom_dict_for_json = copy.deepcopy(self.geom_dict)
         self.geom_dict = self.vector_map.gen_vectorized_samples(self.geom_dict)
         if self.tran_args.wid_lan[0]:
             self.adjust_lane_width()
-            self.truncate_and_save('geom_ins', '6_adjust_lane')
+            self.truncate_and_save('geom_ins', '5_adjust_lane')
