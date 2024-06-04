@@ -34,19 +34,20 @@ We provide a run file [execution_ex.py](./python-sdk/execution_ex.py) illustrati
 from mapmodex import MapModEX
 
 ## load MapModEX
-mme = MapModEX(data_root:str)
+mme = MapModEX(./data)
 
 ## set perturbation versions
-pt_geom_1 = {'del_lan':[1, 0.3, None]}   # randomly delet lanes
+pt_geom_1 = {'del_lan':[1, 0.3, None]} #randomly delet lanes
 mme.update_pt_version([pt_geom_1])
 
 ## lunch MapModEx
-mme.mod_nuscenes(map_version_nusc:str)
+mme.mod_nuscenes('v1.0-mini', vis=True) #When vis is true, PNG files are generated for visualization.
 ```
 
 ## Results
 
 Our model achieves the following performance:
+![](./documents/images/statistical.png)
 
 <!-- ## Support
 Please open an issue to ask your questions. -->

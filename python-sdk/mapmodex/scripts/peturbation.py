@@ -4,7 +4,7 @@ import numpy as np
 
 from nuscenes.map_expansion.map_api import NuScenesMapExplorer
 from shapely import affinity, ops
-from shapely.geometry import Point, Polygon, LineString
+from shapely.geometry import Point
 
 from ..utils import *
 

@@ -1,3 +1,9 @@
+"""
+reference to MapTRv2: https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
+lisence to MIT
+"""
+
+
 import copy
 import numpy as np
 
