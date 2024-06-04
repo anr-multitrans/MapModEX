@@ -462,30 +462,41 @@ class MapTransform:
     def shift_map(self):
         xoff = random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1])
         yoff = random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])
-        xy_off = [xoff, yoff]
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
-                    for i in range(2):
-                        vect[:i] += xy_off[i]
-                    self.vect_dict[layer][ind] = vect
+                    new_point_list = []
+                    for point in vect:
+                        x = point[0] + xoff
+                        y = point[1] + yoff
+                        new_point_list.append([x, y])
+                    
+                    self.vect_dict[layer][ind] = np.array(new_point_list)
                     
     def rotate_map(self):
         angle = random.randint(self.tran_args.rot_pat[2][0])
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
-                    vect[:0] = vect[:0] * math.cos(angle) - vect[:1] * math.sin(angle)
-                    vect[:1] = vect[:0] * math.sin(angle) + vect[:1] * math.cos(angle)
-                    self.vect_dict[layer][ind] = vect
+                    new_point_list = []
+                    for point in vect:
+                        x = point[0] * math.cos(angle) - point[1] * math.sin(angle)
+                        y = point[1] * math.sin(angle) + point[1] * math.cos(angle)
+                        new_point_list.append([x, y])
+
+                    self.vect_dict[layer][ind] = np.array(new_point_list)
     
     def flip_map(self):
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
-                    for i in range(2):
-                        vect[:i] *= self.tran_args.sca_pat[2][i]
-                    self.vect_dict[layer][ind] = vect
+                    new_point_list = []
+                    for point in vect:
+                        x = point[0] * self.tran_args.sca_pat[2][0]
+                        y = point[1] * self.tran_args.sca_pat[2][1]
+                        new_point_list.append([x, y])
+
+                    self.vect_dict[layer][ind] = np.array(new_point_list)
         
     def zoom_layers(self, instance_list, correspondence_list, layer_name, args):
         times = math.floor(self.num_layer_elements[layer_name] * args[1])
