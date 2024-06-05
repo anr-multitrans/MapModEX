@@ -776,7 +776,7 @@ def get_agent_info(geoms_dict):
             layer_dic['geom'], layer_dic, geoms_dict, 'lane', 'agent_token')
 
         layer_dic, geoms_dict = get_interect_info(
-            layer_dic['eco'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
+            layer_dic['ego'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
 
     return geoms_dict
 

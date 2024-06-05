@@ -47,7 +47,11 @@ mme.mod_nuscenes('v1.0-mini', vis=True) #When vis is true, PNG files are generat
 ## Results
 
 Our model achieves the following performance:
+Original(gray) and perturbed(red) distributions of lanes in a map (first line) and width of lanes (second line) in the nuScenes dataset for five perturbations (x-axis:lanes/width, y-axis:elements).
 ![](./documents/images/statistical.png)
+
+Performance of the MapEX framework trained with different synthetic existing map scenarios implemented through our MapModEX library.
+![](./documents/images/table.png)
 
 <!-- ## Support
 Please open an issue to ask your questions. -->
