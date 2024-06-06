@@ -518,8 +518,8 @@ class get_vec_map():
             self.map_path = None
 
     def _get_patch_info(self):
-        patch_h = self.pc_range[4]-self.pc_range[1]
-        patch_w = self.pc_range[3]-self.pc_range[0]
+        patch_h = self.pc_range[3]-self.pc_range[0]
+        patch_w = self.pc_range[4]-self.pc_range[1]
         self.patch_size = (patch_h, patch_w)
 
         if self.e2g_translation is not None:

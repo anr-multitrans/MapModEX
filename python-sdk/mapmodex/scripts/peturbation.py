@@ -146,30 +146,34 @@ class MapTransform:
             xoff = 0
             yoff = 0
             angle = 0
-            origin_rot = 'center'
+            origin_rot = [0,0]
             xfact = 1
             yfact = 1
-            origin_sca = 'center'
+            origin_sca = [0,0]
             
-            if aff is None:
-                xoff = random.choice([-3.5, 3.5])
-                yoff = random.choice([-3.5, 3.5])
-                angle = random.randint(-180, 180)
-                origin_rot = (0,0)
-                xfact = random.choice([-1, 1])
-                yfact = random.choice([-1, 1])
-                origin_sca = 'center'
+            if self.tran_args.diy:
+                print('adding centerline parameters setting:')
+                xoff = float(input("Enter shift xoff: "))
+                yoff = float(input("Enter shift yoff: "))
+                angle = int(float(input("Enter rotate angle: ")))
+                xfact = int(float(input("Enter scale xfact(can only be 1 or -1): ")))
+                yfact = int(float(input("Enter scale yfact(can only be 1 or -1): ")))
             else:
-                if aff['name'] == 'shi_lan':
-                    xoff = random.uniform(aff['tran'][2][0][0], aff['tran'][2][0][1])
-                    yoff = random.uniform(aff['tran'][2][1][0], aff['tran'][2][1][1])
-                elif aff['name'] == 'rot_lan':
-                    angle = random.randint(aff['tran'][2][0][0], aff['tran'][2][0][1])
-                    origin_rot = aff['tran'][2][1]
-                elif aff['name'] == 'sca_lan':
-                    xfact = self.tran_args.rot_pat[2][0]
-                    yfact = self.tran_args.rot_pat[2][1]
-                    origin_sca = self.tran_args.sca_pat[2][2]
+                if aff is None:
+                    xoff = random.choice([-3.5, 3.5])
+                    yoff = random.choice([-3.5, 3.5])
+                    angle = random.randint(-180, 180)
+                    xfact = random.choice([-1, 1])
+                    yfact = random.choice([-1, 1])
+                else:
+                    if aff['name'] == 'shi_lan':
+                        xoff = random.uniform(aff['tran'][2][0][0], aff['tran'][2][0][1])
+                        yoff = random.uniform(aff['tran'][2][1][0], aff['tran'][2][1][1])
+                    elif aff['name'] == 'rot_lan':
+                        angle = random.randint(aff['tran'][2][0][0], aff['tran'][2][0][1])
+                    elif aff['name'] == 'sca_lan':
+                        xfact = self.tran_args.rot_pat[2][0]
+                        yfact = self.tran_args.rot_pat[2][1]
             
                         
             new_lane = centerline_dic['geom']
@@ -297,13 +301,23 @@ class MapTransform:
 
     def affine_transform_patch(self):
         """affine transfor all the map elements"""
-        if self.tran_args.rot_pat[0]:
-            rot_p = [random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1]), self.tran_args.rot_pat[2][1]]
-        if self.tran_args.sca_pat[0]:
-            sca_p = [self.tran_args.rot_pat[2][0], self.tran_args.rot_pat[2][1], self.tran_args.sca_pat[2][2]]
-        if self.tran_args.shi_pat[0]:
-            shi_p = [random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1]),
-                     random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])]
+        if self.tran_args.diy:
+            rot_p = input("Enter rotate angle: ")
+            rot_p = [int(float(rot_p)), [0,0]]
+            sca_p_x = input("Enter scale xfact(can only be 1 or -1): ")
+            sca_p_y = input("Enter scale yfact(can only be 1 or -1): ")
+            sca_p = [int(float(sca_p_x)), int(float(sca_p_y)), [0,0]]
+            shi_p_x = input("Enter shift xoff: ")
+            shi_p_y = input("Enter shift yoff: ")
+            shi_p = [float(shi_p_x), float(shi_p_y)]
+        else:
+            if self.tran_args.rot_pat[0]:
+                rot_p = [random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1]), self.tran_args.rot_pat[2][1]]
+            if self.tran_args.sca_pat[0]:
+                sca_p = [self.tran_args.rot_pat[2][0], self.tran_args.rot_pat[2][1], self.tran_args.sca_pat[2][2]]
+            if self.tran_args.shi_pat[0]:
+                shi_p = [random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1]),
+                        random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])]
         
         for key in self.geom_dict.keys():
             if len(self.geom_dict[key]):
@@ -380,15 +394,12 @@ class MapTransform:
                             
                     self.geom_dict[k] = moved_polylines
             
-    def delete_layers(self, map_vector_dict, correspondence_list, layer_name, args):
-        times = math.ceil(self.num_layer_elements[layer_name] * args[1])
-        for _ in range(times):
-            if len(map_vector_dict[layer_name]):
-                ind = random.randrange(len(map_vector_dict[layer_name]))
-                del map_vector_dict[layer_name][ind]
-                del correspondence_list[layer_name][ind]
-
-        return map_vector_dict, correspondence_list
+    def delete_layers(self, layer_name, args):
+        times = math.ceil(len(self.geom_dict[layer_name]) * args[1])
+        if times:
+            delet_ped = random_select_element(self.geom_dict[layer_name], times)
+            for ped in delet_ped:
+                self.geom_dict[layer_name].pop(ped['token'])
 
     def shift_layers(self, instance_list, correspondence_list, layer_name, args):
         times = math.floor(self.num_layer_elements[layer_name] * args[1])
@@ -474,7 +485,7 @@ class MapTransform:
                     self.vect_dict[layer][ind] = np.array(new_point_list)
                     
     def rotate_map(self):
-        angle = random.randint(self.tran_args.rot_pat[2][0])
+        angle = random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1])
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
@@ -670,11 +681,18 @@ class MapTransform:
 
     def difromate_map(self):
         """Trigonometric warping map patches"""
-        # Vertical distortion amplitude random maximum range int
-        v = self.tran_args.def_pat_tri[2][0]
-        # Horizontal distortion amplitude random maximum range int
-        h = self.tran_args.def_pat_tri[2][1]
-        i = self.tran_args.def_pat_tri[2][2]  # Inclination amplitude [-Max_r Max_r] int
+        v =0
+        h =0
+        i =0
+        
+        if self.tran_args.diy:
+            i = float(input("Enter your inclination amplitude: "))
+        else:
+            # Vertical distortion amplitude random maximum range int
+            v = self.tran_args.def_pat_tri[2][0]
+            # Horizontal distortion amplitude random maximum range int
+            h = self.tran_args.def_pat_tri[2][1]
+            i = self.tran_args.def_pat_tri[2][2]  # Inclination amplitude [-Max_r Max_r] int
 
         xlim = [-self.patch_box[3]/2, self.patch_box[3]/2]
         ylim = [-self.patch_box[2]/2, self.patch_box[2]/2]
@@ -709,6 +727,10 @@ class MapTransform:
 
     def guassian_warping(self):
         """gaussian warping map patches"""
+        if self.tran_args.diy:
+            # mean = float(input("Enter gaussian mean: "))
+            standard = float(input("Enter gaussian standard: "))
+            self.tran_args.def_pat_gau[2][1] = standard
         g_xv, g_yv = self._gaussian_grid(self.tran_args.def_pat_gau)
 
         for key in self.vect_dict.keys():
@@ -719,6 +741,10 @@ class MapTransform:
 
     def guassian_noise(self):
         """add gaussian noise to map patches"""
+        if self.tran_args.diy:
+            # mean = input("Enter gaussian mean: ")
+            standard = float(input("Enter gaussian standard: "))
+            self.tran_args.noi_pat_gau[2][1] = standard
         for key in self.vect_dict.keys():
             if len(self.vect_dict[key]):
                 for ind, ins in enumerate(self.vect_dict[key]):
@@ -752,29 +778,29 @@ class MapTransform:
         """Perturb the map vectory layer: image algorithms acting on numpy arrays"""
         self.vect_dict = geom_to_np(self.geom_dict, inter=True)
 
-        if self.tran_args.shi_pat[0]:
-            self.shift_map()
-            self.truncate_and_save('vect', '6_shift_map')
+        # if self.tran_args.shi_pat[0]:
+        #     self.shift_map()
+        #     self.truncate_and_save('vect', '8_shift_map')
             
-        if self.tran_args.rot_pat[0]:
-            self.rotate_map()
-            self.truncate_and_save('vect', '7_rotate_map')
+        # if self.tran_args.rot_pat[0]:
+        #     self.rotate_map()
+        #     self.truncate_and_save('vect', '9_rotate_map')
             
-        if self.tran_args.sca_pat[0]:
-            self.flip_map() #TOFIX
-            self.truncate_and_save('vect', '8_flip_map')
+        # if self.tran_args.sca_pat[0]:
+        #     self.flip_map() #TOFIX
+        #     self.truncate_and_save('vect', '10_flip_map')
         
         if self.tran_args.def_pat_tri[0]:
             self.difromate_map()
-            self.truncate_and_save('vect', '9_warping_tri')
+            self.truncate_and_save('vect', '11_warping_tri')
 
         if self.tran_args.def_pat_gau[0]:
             self.guassian_warping()
-            self.truncate_and_save('vect', '10_warping_gua')
+            self.truncate_and_save('vect', '12_warping_gua')
 
         if self.tran_args.noi_pat_gau[0]:
             self.guassian_noise()
-            self.truncate_and_save('vect', '11_noiseing')
+            self.truncate_and_save('vect', '13_noiseing')
 
     def perturb_geom_layer(self, geom_dict):
         """Perturb the map geometry layer: 'centerline'-based perturbations"""
@@ -786,22 +812,34 @@ class MapTransform:
 
         if self.tran_args.add_lan[0]:
             self.add_centerline()
-            self.truncate_and_save('geom', '2_add_lane')
+            self.truncate_and_save('geom', '2_add_lane_1')
+        
+        if self.tran_args.add_lan[0]:
+            self.add_centerline()
+            self.truncate_and_save('geom', '2_add_lane_2')
         
         if any(getattr(self.tran_args, pat)[0] for pat in ['rot_lan', 'sca_lan', 'shi_lan']):
             self.affine_transform_centerline()
             self.truncate_and_save('geom', '3_affine_transform_lane')
         
+        if self.tran_args.del_ped[0]:
+            self.delete_layers('ped_crossing', self.tran_args.del_ped)
+            self.truncate_and_save('geom', '4_delet_ped_crossing')
+        
         if self.tran_args.shi_ped[0]:
             self.shift_ped_crossing()
-            self.truncate_and_save('geom', '4_shift_ped_crossing')
+            self.truncate_and_save('geom', '5_shift_ped_crossing')
         
-        # if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
-        #     self.affine_transform_patch()
-        #     self.truncate_and_save('geom', '5_affine_transform_map')
+        if self.tran_args.del_div[0]:
+            self.delete_layers('divider', self.tran_args.del_div)
+            self.truncate_and_save('geom', '6_delet_divider')
+        
+        if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
+            self.affine_transform_patch()
+            self.truncate_and_save('geom', '7_affine_transform_map')
         
         self.geom_dict_for_json = copy.deepcopy(self.geom_dict)
         self.geom_dict = self.vector_map.gen_vectorized_samples(self.geom_dict)
         if self.tran_args.wid_lan[0]:
             self.adjust_lane_width()
-            self.truncate_and_save('geom_ins', '5_adjust_lane')
+            self.truncate_and_save('geom_ins', '7_adjust_lane')

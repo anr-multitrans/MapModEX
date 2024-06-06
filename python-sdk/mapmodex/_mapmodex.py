@@ -34,9 +34,9 @@ class MapModEX():
     def _add_pt_version(self, pt_v):
         pt_para = PerturbParameters()
         
-        if 'pt_name' not in pt_v:
+        if pt_para.pt_name is None:
             self.pt_version_name += 1
-            pt_v['pt_name'] = 'pt_v_' +str(self.pt_version_name)
+            pt_para.pt_name = 'pt_v_' +str(self.pt_version_name)
         
         for key, val in pt_v.items():
             pt_para.update_attribute(key, val)
