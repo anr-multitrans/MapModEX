@@ -10,7 +10,7 @@ import sys
 import warnings
 from matplotlib import pyplot as plt
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon, LineString
+from shapely.geometry import Polygon, MultiPolygon, LineString, Point
 from shapely import ops, affinity
 import networkx as nx
 from nuscenes.map_expansion.map_api import NuScenesMap
@@ -207,8 +207,8 @@ class record_generator:
 def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
     r_gen = record_generator(info_dic["pertu_nusc_infos"])
 
-    ins_dic = info_dic["map_ins_org_dict"]
-    geom_dic = info_dic['map_geom_org_dic']
+    ins_dic = info_dic["map_ins_dic_patch"]
+    geom_dic = info_dic['map_geom_dic_patch']
     for layer_name in geom_dic.keys():
         if layer_name in ['boundary']:
             for geom in ins_dic[layer_name]:
@@ -225,6 +225,32 @@ def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
             json.dump(r_gen.pertu_nusc_infos, outfile)
 
     return r_gen.pertu_nusc_infos
+
+def creat_ped_polygon(map_explorer, road_segment_token=None): #FIXME
+    min_x, min_y, max_x, max_y = map_explorer.map_api.get_bounds('road_segment', road_segment_token)
+
+    x_range = max_x - min_x
+    y_range = max_y - min_y
+
+    if max([x_range, y_range]) <= 4:
+        new_polygon = map_explorer.map_api.extract_polygon(map_explorer.map_api.get('road_segment', road_segment_token)['polygon_token'])
+    else:
+        if x_range > y_range:
+            rand = random.uniform(min_x, max_x - 4)
+            left_bottom = Point([rand, min_y])
+            left_top = Point([rand, max_y])
+            right_bottom = Point([rand + 4, min_y])
+            right_top = Point([rand + 4, max_y])
+        else:
+            rand = random.uniform(min_y, max_y - 4)
+            left_bottom = Point([min_x, rand])
+            left_top = Point([min_x, rand + 4])
+            right_bottom = Point([max_x, rand])
+            right_top = Point([max_x, rand + 4])
+
+        new_polygon = Polygon([left_top, left_bottom, right_bottom, right_top])
+
+    return new_polygon
 
 
 class delet_record:
@@ -451,6 +477,52 @@ def get_geom_in_patch(map_explorer, geoms, patch_box=[0, 0, 60, 30], patch_angle
 
     return geoms
 
+def is_empty(data):
+    if isinstance(data, np.ndarray):
+        return data.size == 0
+    elif isinstance(data, tuple):
+        return len(data) == 0
+    else:
+        raise TypeError("Unsupported type. Only NumPy arrays and tuples are supported.")
+
+def get_index(ins_c, threshold=[None, None]):
+    indices_list = []
+    if threshold[0]:
+        indices = np.where(ins_c > threshold[0])
+        try:
+            indices_list.append(list(zip(indices[0], indices[1]))) # Convert the result to a list of index tuples
+        except:
+            pass
+            
+    if threshold[1]:
+        indices = np.where(ins_c < threshold[1])
+        try:
+            indices_list.append(list(zip(indices[0], indices[1])))
+        except:
+            pass
+    
+    return indices_list
+
+def get_vect_in_patch(vect_list, patch_box=[0, 0, 60, 30]):
+    x_min = patch_box[0] - patch_box[3] / 2
+    x_max = patch_box[0] + patch_box[3] / 2
+    y_min = patch_box[1] - patch_box[2] / 2
+    y_max = patch_box[1] + patch_box[2] / 2
+    xy_range = [[x_min, x_max], [y_min, y_max]]
+
+    new_vect_list = []
+    for vect in vect_list:
+        
+        # for dem in range(vect.shape[1]):
+        #     ins_c = vect[:, dem]
+        #     indices_list = get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
+        
+        # for indice in indices_list:
+        #     np.delete(vect, indice)        
+        
+        new_vect_list.append(threshold_ins(vect, xy_range))
+    
+    return new_vect_list
 
 def interpolate(instance, inter_args=0):
     if not inter_args:
@@ -678,21 +750,25 @@ def move_polygon_away(polygon_to_move, other_polygons, direction, step_size=0.1)
     return polygon_to_move, moved_distance
 
 
-def fix_corner(ins, patch_box):
+def fix_corner(vect, patch_box):
     x_min = patch_box[0] - patch_box[3] / 2
     x_max = patch_box[0] + patch_box[3] / 2
     y_min = patch_box[1] - patch_box[2] / 2
     y_max = patch_box[1] + patch_box[2] / 2
     xy_range = [[x_min, x_max], [y_min, y_max]]
 
-    for dem in range(ins.shape[1]):
-        ins_c = ins[:, dem]
-        ins_c[ins_c < xy_range[dem][0]] = xy_range[dem][0]
-        ins_c[ins_c > xy_range[dem][1]] = xy_range[dem][1]
-        ins[:, dem] = ins_c
+    return threshold_ins(vect, xy_range)
 
-    return ins
-
+def threshold_ins(vect, xy_range):
+    y = vect.shape[1]
+    for dem in range(vect.shape[1]):
+        ins_c = vect[:, dem]
+        indices_list = get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
+    
+    for indice in indices_list:
+        np.delete(vect, indice)
+        
+    return vect        
 
 def get_agent_info(geoms_dict):
     for layer_dic in geoms_dict['agent'].values():
@@ -700,7 +776,7 @@ def get_agent_info(geoms_dict):
             layer_dic['geom'], layer_dic, geoms_dict, 'lane', 'agent_token')
 
         layer_dic, geoms_dict = get_interect_info(
-            layer_dic['eco'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
+            layer_dic['ego'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
 
     return geoms_dict
 
@@ -734,7 +810,10 @@ def interpolate_geom(geom, inter, inter_acc):
         instance = geom
     else:
         return None
-        
+    
+    if geom.is_empty:
+        return None
+    
     if inter:
         instance = interpolate(instance, inter_acc)
     
@@ -745,8 +824,8 @@ def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=N
 
     Args:
         map_ins_dict (dict): _description_
-        inter_args (int/dict, optional): Interpolation accuracy. If int_back=true, it is a dict containing the accuracy of the original vector. Defaults to 0.
-        int_back (bool, optional): Interpolate the geometry(converted from a vector) back to the accuracy of the original vector. Defaults to False.
+        inter_args (int/dict, optional): Interpolation accuracy. If int_back=true, it's a dict with original vector accuracy. Default is 0.
+        int_back (bool, optional): Interpolate geometry from vector back to original accuracy. Default is False.
         info (dict, optional): _description_. Defaults to None.
         map_version (_type_, optional): _description_. Defaults to None.
         save (_type_, optional): _description_. Defaults to None.
@@ -809,10 +888,10 @@ def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=N
 
     return map_dict
 
-def affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact):
+def affine_transfer_4_add_centerline(new_lane, xoff=0, yoff=0, angle=0, origin_rot='center', xfact=0, yfact=0, origin_sca='center'):
     new_lane = affinity.translate(new_lane, xoff, yoff) #shift
-    new_lane = affinity.rotate(new_lane, angle, origin) #rotate
-    new_lane = affinity.scale(new_lane, xfact, yfact, origin=origin) #flip
+    new_lane = affinity.rotate(new_lane, angle, origin_rot) #rotate
+    new_lane = affinity.scale(new_lane, xfact, yfact, origin=origin_sca) #flip
     
     return new_lane
 
@@ -858,12 +937,22 @@ def move_polygons(line, polygons_dic, distance, except_token = []):
 
     return polygons_dic
 
-def random_unique_items(dictionary, num_items):
-    keys = list(dictionary.keys())
-    random.shuffle(keys)
-    selected_keys = keys[:num_items]
-    
-    return {key: dictionary[key] for key in selected_keys}
+def random_select_element(all_elements, num_elements):
+    if isinstance(all_elements, dict):
+        keys = list(all_elements.keys())
+        selected_keys = random.sample(keys, num_elements)
+        return [all_elements[key] for key in selected_keys]
+    elif isinstance(all_elements, list):
+        return random.sample(all_elements, num_elements)
+
+
+def randomly_pop_elements(my_list, num_elements):
+    popped_elements = []
+    for _ in range(num_elements):
+        if my_list:  # Ensure the list is not empty
+            random_index = random.randint(0, len(my_list) - 1)
+            popped_elements.append(my_list.pop(random_index))
+    return popped_elements, my_list
 
 class NuScenesMap4MME(NuScenesMap):
     def __init__(self,
@@ -872,7 +961,7 @@ class NuScenesMap4MME(NuScenesMap):
         
         # super(NuScenesMap4MME, self).__init__(dataroot, map_name)
         super().__init__(dataroot, map_name)
-        self.non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light', 'centerline']
+        self.non_geometric_line_layers = ['road_divider', 'lane_divider', 'traffic_light', 'centerline', 'boundary', 'agent', 'divider']
         
         self.boundary = self._load_layer('boundary')
         self.divider = self._load_layer('divider')
@@ -940,4 +1029,11 @@ def check_common(segment_4_lane, lane_divider):
                 return divider['token']
     
     return None
+
+def count_layer_element(geom_dict):
+    num_layer_elements = {}
+    for k, v in geom_dict.items():
+        num_layer_elements[k] = len(v)
+        
+    return num_layer_elements
 
