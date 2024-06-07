@@ -8,7 +8,6 @@ import secrets
 import shutil
 import sys
 import warnings
-from matplotlib import pyplot as plt
 import numpy as np
 from shapely.geometry import Polygon, MultiPolygon, LineString, Point
 from shapely import ops, affinity

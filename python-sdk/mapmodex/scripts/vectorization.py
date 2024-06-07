@@ -1,8 +1,5 @@
-"""
-reference to MapTRv2: https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
-lisence to MIT
-"""
-
+###     Based on data processing code from the official MapTRv2 code available under MIT License
+###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
 
 import copy
 import numpy as np
@@ -303,9 +300,9 @@ class VectorizedMap(object):
                     polygons.append(lane_dic['geom'])
 
         union_segments = ops.unary_union(polygons)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
+        # max_x = self.patch_box[3] / 2
+        # max_y = self.patch_box[2] / 2
+        # local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
         exteriors = []
         interiors = []
         if union_segments.geom_type != 'MultiPolygon':
@@ -319,7 +316,7 @@ class VectorizedMap(object):
         for ext in exteriors:
             if ext.is_ccw:
                 ext.coords = list(ext.coords)[::-1]
-            lines = ext.intersection(local_patch)
+            lines = ext#.intersection(local_patch)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
@@ -327,7 +324,7 @@ class VectorizedMap(object):
         for inter in interiors:
             if not inter.is_ccw:
                 inter.coords = list(inter.coords)[::-1]
-            lines = inter.intersection(local_patch)
+            lines = inter#.intersection(local_patch)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)

@@ -65,6 +65,8 @@ def one_type_line_geom_to_instances(line_geom):
                     line_instances.append(single_line)
             elif line.geom_type == 'LineString':
                 line_instances.append(line)
+            elif line.geom_type == 'LinearRing':
+                line_instances.append(line)
             else:
                 raise NotImplementedError
     return line_instances

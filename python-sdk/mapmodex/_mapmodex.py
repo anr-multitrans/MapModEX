@@ -58,7 +58,7 @@ class MapModEX():
             self._add_pt_version(pt_v)
             
         
-    def mod_nuscenes(self, map_version:list, root_name='nuscenes', output_type='json', vis=False):
+    def mod_nuscenes(self, map_version:list, root_name='nuscenes', output_type=None, vis=False):
         """Perturb the nuScenes map
 
         Args:
@@ -69,13 +69,15 @@ class MapModEX():
         """
         for v_name in map_version:
             print('generating %s - %s' % ('NuScenes', v_name))
+            out_put_path = os.path.join(self.output, 'nuscenes_output', v_name)
             create_nuscenes_infos(
                 root_path=os.path.join(self.data_root, root_name),
-                out_path=os.path.join(self.output, 'nuscenes_output'),
+                out_path=out_put_path,
                 pertube_vers=self.pt_version,
                 version=v_name,
                 vis = vis,
                 out_type = output_type)
+            print('results are saved at: ', out_put_path)
             
     def mod_av2(self, map_version:list, root_name='av2', output_type='json', vis=False):
         """Perturb the argoverse 2 map
@@ -88,14 +90,16 @@ class MapModEX():
         """
         for v_name in map_version:
             print('generating %s - %s' % ('argoverse 2', v_name))
+            out_put_path = os.path.join(self.output, 'av2_output', v_name)
             create_av2_infos(
                 root_path=os.path.join(self.data_root, root_name),
                 pertube_vers=self.pt_version,
-                dest_path=os.path.join(self.output, 'av2_output'),
+                dest_path=out_put_path,
                 split=v_name,
                 pc_range=self.pc_range,
                 vis=vis,
                 output_type=output_type)
+            print('results are saved at: ', out_put_path)
 
     def mod_mme(self, map_version:list, root_name='mme', output_type='json', vis=False): #TODO
         """Perturb the MapModEX map: It inherits the map API of nuScenes. The map name is unified as singapore-onenorth.json.
@@ -107,6 +111,7 @@ class MapModEX():
             vis (bool, optional): _description_. Defaults to False.
         """
         print('generating %s' % ('MapModEX-map'))
+        out_put_path = os.path.join(self.output, 'mme_output')
         creat_mme_infos(
             root_path=os.path.join(self.data_root, root_name),
             map_version=map_version,
@@ -115,4 +120,4 @@ class MapModEX():
             pc_range=self.pc_range,
             vis=vis,
             output_type=output_type)
-    
+        print('results are saved at: ', out_put_path)

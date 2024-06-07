@@ -1,9 +1,7 @@
-import json
 import os
 import mmcv
 
-from matplotlib import pyplot as plt
-from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
+from nuscenes.map_expansion.map_api import NuScenesMapExplorer
 
 from .map_reading import get_vec_map
 from ..utils import *

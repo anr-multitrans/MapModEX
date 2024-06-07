@@ -24,7 +24,7 @@ pt_del_div = {'del_lan':[1, 0, None], 'pt_name':'delete_lane_div', 'diy':True}
 pt_versions = [pt_geom_1]
 mme.update_pt_version(pt_versions, False)
 
-## lunch MapModEx
+## launch MapModEx
 mme.mod_nuscenes(map_version_nusc, output_type='json', vis=True)
 # mme.mod_av2(map_version_av2, output_type='pkl', vis=True)
 # mme.mod_mme(mv_mme, output_type='pkl')

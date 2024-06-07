@@ -149,7 +149,7 @@ class MapTransform:
             origin_rot = [0,0]
             xfact = 1
             yfact = 1
-            origin_sca = [0,0]
+            origin_sca = Point([0,0])
             
             if self.tran_args.diy:
                 print('adding centerline parameters setting:')
@@ -178,12 +178,15 @@ class MapTransform:
                         
             new_lane = centerline_dic['geom']
             new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
-            centerlien_dic = layer_dict_generator(new_lane, source='new')
-            self.geom_dict['centerline'][centerlien_dic['token']] = centerlien_dic
+            new_cl_dic = layer_dict_generator(new_lane, source='new')
+            self.geom_dict['centerline'][new_cl_dic['token']] = new_cl_dic #new centerline
             
             center_lane = new_lane.buffer(1.8)
             new_lane_dic = layer_dict_generator(center_lane, source='centerline')
-            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic
+            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic #new lane from centerline
+            
+            self.geom_dict['lane'][new_lane_dic['token']]['centerline_token'] = [new_cl_dic['token']] #add centerline token to new lane
+            self.geom_dict['centerline'][new_cl_dic['token']]['lane_token'] = [new_lane_dic['token']] #add lane token to centerline
             
             if 'lane_token' in centerline_dic:
                 for lane_token in centerline_dic['lane_token']:
@@ -193,8 +196,12 @@ class MapTransform:
                             new_lane = lane_dic['geom']
                             new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
                             new_lane_dic = layer_dict_generator(new_lane, source='new')
-                            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic
-                    
+                            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic #new lane from lane
+                            
+                            self.geom_dict['lane'][new_lane_dic['token']]['centerline_token'] = [new_cl_dic['token']] #add centerline token to new lane
+                            self.geom_dict['centerline'][new_cl_dic['token']]['lane_token'].append(new_lane_dic['token']) #add lane token to centerline
+            
+            # self.geom_dict['centerline'][centerlien_dic['token']]['ped_crossing_token'] = []        
             # if 'ped_crossing_token' in centerline_dic: #FIXME
             #     for lane_token in centerline_dic['ped_crossing_token']:
             #         lane_dic = self.geom_dict['ped_crossing'][lane_token]
@@ -202,6 +209,8 @@ class MapTransform:
             #         new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact)
             #         new_lane_dic = layer_dict_generator(new_lane, source='new')
             #         self.geom_dict['ped_crossing'][new_lane_dic['token']] = new_lane_dic
+                    # self.geom_dict['ped_crossing'][new_lane_dic['token']]['centerline_token'] = [centerlien_dic['token']] #add centerline token to new ped_crossing
+                    # self.geom_dict['centerline'][centerlien_dic['token']]['ped_crossing_token'].append(new_lane_dic['token']) #add lane token to centerline
 
     def del_centerline(self, aff=None):
         """Delet a path: a center line w/ lanes and crosswalks in series"""
@@ -812,11 +821,7 @@ class MapTransform:
 
         if self.tran_args.add_lan[0]:
             self.add_centerline()
-            self.truncate_and_save('geom', '2_add_lane_1')
-        
-        if self.tran_args.add_lan[0]:
-            self.add_centerline()
-            self.truncate_and_save('geom', '2_add_lane_2')
+            self.truncate_and_save('geom', '2_add_lane')
         
         if any(getattr(self.tran_args, pat)[0] for pat in ['rot_lan', 'sca_lan', 'shi_lan']):
             self.affine_transform_centerline()

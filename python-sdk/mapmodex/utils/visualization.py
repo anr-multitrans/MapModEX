@@ -1,23 +1,13 @@
 import math
 import os
 import pickle
-from typing import List, Optional, Tuple
-import descartes
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-from matplotlib.patches import Arrow, Rectangle
-from nuscenes.map_expansion.bitmap import BitMap
-from matplotlib.widgets import Button, TextBox
 import tkinter as tk
 from tkinter import messagebox
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon, box
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from shapely.errors import TopologicalError
 from shapely.validation import make_valid
-
 
 from .utilities import *
 # Recommended style to use as the plots will show grids.
@@ -305,13 +295,3 @@ def show_geom(new_shape):
         os.exit("wrong geom type: ", new_shape.geom_type)
         
     plt.show()
-    
-    
-if __name__ == '__main__':
-    map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion/pt_patch.pkl'
-    save_map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion'
-
-    with open(map_path, 'rb') as f:
-        ret_di = pickle.load(f)
-
-    vis_contours_local(ret_di, save_path=save_map_path)

@@ -40,7 +40,7 @@ mme = MapModEX(./data)
 pt_geom_1 = {'del_lan':[1, 0.3, None]} #randomly delet lanes
 mme.update_pt_version([pt_geom_1])
 
-## lunch MapModEx
+## launch MapModEx
 mme.mod_nuscenes('v1.0-mini', vis=True) #When vis is true, PNG files are generated for visualization.
 ```
 
