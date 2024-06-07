@@ -73,7 +73,12 @@ def one_type_line_geom_to_instances(line_geom):
 
 def move_geom(centerline_center, polyline, distance):
     polyline_center = Point(polyline.centroid)
-    direction = np.array([polyline_center.x - centerline_center.x, polyline_center.y - centerline_center.y])
+    try:
+        direction = np.array([polyline_center.x - centerline_center.x, polyline_center.y - centerline_center.y])
+    except:
+        print('not able to move')
+        return polyline
+    
     mv = direction / np.max(abs(direction))* distance
     moved_polyline = affinity.translate(polyline, xoff=mv[0], yoff=mv[1])
 
