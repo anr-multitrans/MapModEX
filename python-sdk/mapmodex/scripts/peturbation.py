@@ -10,7 +10,7 @@ from ..utils import *
 
 
 class PerturbParameters():
-    """class for pertubation parameter setting"""
+    """class for perturbation parameter setting"""
     def __init__(self,
                  pt_name=None, # perturbation version name
                  
@@ -31,7 +31,7 @@ class PerturbParameters():
                  # dividers perturbation
                  del_div=[0, 0, None],  #[switch, proportion, None]
                  
-                 # boundray perturabtion
+                 # boundray perturbation
                  wid_bou=[0, 0, 0], #[switch, proportion, distance], the widening distance should be within a reasonable range (-2,15)
                  
                  # patch perturbation
@@ -43,7 +43,7 @@ class PerturbParameters():
                  def_pat_gau=[0, None, [0, 1]], # [switch, proportion, [mean, standard]]
                  noi_pat_gau=[0, None, [0, 1]], # [switch, proportion, [mean, standard]]
                  
-                 ## other pertubation setting
+                 ## other perturbation setting
                  diy=False, #Manually select the layers that need to be perturbated
                  truncate=False, #Visualizing the intermediate steps of perturbations
                  # Interpolation
@@ -82,7 +82,7 @@ class PerturbParameters():
 
         Args:
             attr_name (str): variable name
-            new_value (_type_): varibale value
+            new_value (_type_): variable value
 
         Raises:
             AttributeError: if there is no variable
@@ -94,14 +94,14 @@ class PerturbParameters():
 class MapTransform:
     """map pertubation class"""
     def __init__(self, map_explorer: NuScenesMapExplorer, geom_dict, vector_map=None, visual=None, tran_args=None, patch_angle=0, patch_box=[0,0,60,30]):
-        """initialization
+        """ initialization
 
         Args:
             map_explorer (NuScenesMapExplorer): Dataset class in the nuScenes map dataset explorer.
-            geom_dict (dict): geomtry map layers
+            geom_dict (dict): geometry map layers
             vector_map (VectorizedMap, optional): class of vectorize geometry map. Defaults to None.
             visual (RenderMap, optional): class in map visualization. Defaults to None.
-            tran_args (dict, optional): pertubation parameters. Defaults to None.
+            tran_args (dict, optional): perturbation parameters. Defaults to None.
             patch_angle (int, optional): patch angle. Defaults to 0.
             patch_box (list, optional): patch box[x,y,hight,width]. Defaults to [0,0,60,30].
         """
@@ -238,8 +238,8 @@ class MapTransform:
             # for key in self.delet_centerlines.keys():
             #     delet_centerline = centerlines.pop(key)
 
-        # check if there are map layers are inuse after remove centerlines
-        # remove a centerline need to also remove it's token from connected lanes and ped_crossings
+        # check if there are map layers in use after remove centerlines
+        # remove a centerline need also to remove it's token from connected lanes and ped_crossings
         # if a lane or ped_crossing connected no centerline, it should be removed
         delet_lanes = []
         for del_cl in self.delet_centerlines:
@@ -258,9 +258,9 @@ class MapTransform:
                 if not len(ped_crossings[ped_token]['centerline_token']):
                     ped_crossings.pop(ped_token)
 
-        # check if there are agents are inuse or need update after remove lane
-        # remove a lane need to also remove connected agent and agent trajectory
-        # if a agent exits but it's trajectory nolonger be used, update it
+        # check if there are agents in use or need an update after removing a lane
+        # remove a lane need also to remove connected agent and agent trajectory
+        # If a agent exits but is trajectory nolonger being used, update it
         for del_lane in delet_lanes:
             if 'agent_eco_token' in del_lane.keys():
                 for agent_token in del_lane['agent_eco_token']:
@@ -285,7 +285,7 @@ class MapTransform:
         for ag_token in del_agents:
             agents.pop(ag_token)
         
-        # check if there are dividers are inuse
+        # check if there are dividers are in use
         delet_dividers = []
         for delet_lane in delet_lanes:
             for divider_token in ['left_lane_divider_token', 'right_lane_divider_token']:
@@ -303,7 +303,7 @@ class MapTransform:
             if token in lane_dividers:
                 lane_dividers.pop(token)
 
-        # check unresonable: remove isolated element
+        # check unreasonable: remove isolated element
         road_segments = check_isolated(road_segments, [centerlines])
         lane_dividers = check_isolated(lane_dividers, [road_segments, lanes])
         ped_crossings = check_isolated(ped_crossings, [road_segments, lanes], True)
@@ -735,7 +735,7 @@ class MapTransform:
         return g_xv, g_yv
 
     def guassian_warping(self):
-        """gaussian warping map patches"""
+        """Gaussian warping map patches"""
         if self.tran_args.diy:
             # mean = float(input("Enter gaussian mean: "))
             standard = float(input("Enter gaussian standard: "))
@@ -749,7 +749,7 @@ class MapTransform:
                     self.vect_dict[key][ind] = self._warping(ins, g_xv, g_yv)
 
     def guassian_noise(self):
-        """add gaussian noise to map patches"""
+        """add Gaussian noise to map patches"""
         if self.tran_args.diy:
             # mean = input("Enter gaussian mean: ")
             standard = float(input("Enter gaussian standard: "))
@@ -762,7 +762,7 @@ class MapTransform:
                     self.vect_dict[key][ind] += g_nois
 
     def truncate_and_save(self, map_type, map_name = 'inter_pt'):
-        """Visualizing the intermediate steps of perturbations
+        """ Visualizing the intermediate steps of perturbations
 
         Args:
             map_type (str): geometry or vectory
@@ -772,7 +772,7 @@ class MapTransform:
             if map_type == 'geom':
                 ## transfer geom to ready-show vectorized geom 
                 trans_dic = self.vector_map.gen_vectorized_samples(self.geom_dict)
-                ## transform vectorized geom to numpy array
+                ## Transform vectorized geom to NumPy array
                 map_vect_dic = geom_to_np(trans_dic)
             elif map_type == 'geom_ins':
                 map_vect_dic = geom_to_np(self.geom_dict)
@@ -784,7 +784,7 @@ class MapTransform:
             self.visual.vis_contours(trans_np_dict_4_vis, self.ann_name + '_truncate_' + map_name)
             
     def perturb_vect_map(self):
-        """Perturb the map vectory layer: image algorithms acting on numpy arrays"""
+        """Perturb the map vector layer: image algorithms acting on numpy arrays"""
         self.vect_dict = geom_to_np(self.geom_dict, inter=True)
 
         # if self.tran_args.shi_pat[0]:

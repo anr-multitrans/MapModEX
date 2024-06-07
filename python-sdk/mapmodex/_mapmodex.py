@@ -6,7 +6,7 @@ class MapModEX():
     def __init__(self, data_root:str, output_path = None, pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0]):
         """
         Args:
-            data_root (str): path of the map database
+            data_root (str): the path of the map database
             output_path (str, optional): output path. Defaults to None: current address.
             pc_range (list, optional): Patch size (3D):[ymin, xmin, zmin, ymax, xmax, zmax]. Defaults to [-30.0, -15.0, -5.0, 30.0, 15.0, 3.0].
         """
@@ -64,7 +64,7 @@ class MapModEX():
         Args:
             map_version (list): map versions, ex. ['v1.0-mini']
             root_name (str, optional): Map database folder name. Defaults to 'nuscenes'.
-            output_type (str, optional): output tyoe. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
+            output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
             vis (bool, optional): Whether to visualize. Defaults to False.
         """
         for v_name in map_version:
@@ -85,7 +85,7 @@ class MapModEX():
         Args:
             map_version (list): map versions, ex. ['test']
             root_name (str, optional): Map database folder name. Defaults to 'av2'.
-            output_type (str, optional): output tyoe. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
+            output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
             vis (bool, optional): Whether to visualize. Defaults to False.
         """
         for v_name in map_version:
@@ -105,7 +105,7 @@ class MapModEX():
         """Perturb the MapModEX map: It inherits the map API of nuScenes. The map name is unified as singapore-onenorth.json.
 
         Args:
-            map_version (list): the perturbation version. ex. ['mme_org', 'mme_add_lane']
+            map_version (list): the perturbation version. Ex. ['mme_org', 'mme_add_lane']
             root_name (str, optional): Map database folder name. Defaults to 'MME_map'.
             output_type (str, optional): 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
             vis (bool, optional): _description_. Defaults to False.

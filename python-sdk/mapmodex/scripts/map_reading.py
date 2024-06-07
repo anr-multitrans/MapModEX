@@ -470,10 +470,10 @@ class GetMapLayerGeom(object):
 
 # main function
 class get_vec_map():
-    """transfor original data from map database to vectory map, perturbation is opitional."""
+    """transfer original data from map database to vector map, perturbation is optional."""
     def __init__(self, info, nusc_maps, map_explorer, out_path, e2g_translation=None, e2g_rotation=None, pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
                  out_type='json', nusc=None, avm=None, vis=True, mme=False):
-        """initialization
+        """ initialization
 
         Args:
             info (dict): Information from the original map
@@ -610,15 +610,15 @@ class get_vec_map():
             return map_geom_org_dic
     
     def get_map_ann(self, pertube_vers):
-        """get map layers and transfor them to vectory, pertubation is optional
+        """get map layers and transfer them to vector, perturbation is optional
 
         Args:
             pertube_vers (list): perturbed versions, each version should be a dict with parameter_names and parameter_values.
 
         Returns:
-            dict: infomation includ vectory map layers
+            dict: information include vector map layers
         """
-        # get geom for layers and transfer linestring geom to instance
+        # get geom for layers and transfer line string geom to instance
         if self.info['dataset'] == 'nuscenes':
             self.info['map_geom_org_dic'] = self._get_map_nuscenes()
         elif self.info['dataset'] == 'av2':

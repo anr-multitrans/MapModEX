@@ -14,7 +14,7 @@ from ..utils import *
 
 
 class VectorizedMap(object):
-    """transform geometry map layers to vectory"""
+    """transform geometry map layers to vector"""
     def __init__(self,
                  nusc_map,
                  map_explorer,
@@ -29,7 +29,7 @@ class VectorizedMap(object):
                  contour_classes=['road_segment'],
                  centerline_classes=['lane_connector', 'lane'],
                  mme=False):
-        """initialization
+        """ initialization
 
         Args:
             nusc_map (NuScenesMap): Dataset class in the nuScenes map dataset. 
@@ -37,7 +37,7 @@ class VectorizedMap(object):
             patch_box (tuple, optional): patch box[x,y,hight,width]. Defaults to (0,0,60,30).
             patch_angle (int, optional): patch angle. Defaults to 0.
             avm (ArgoverseStaticMap, optional): Dataset class in the Argoverse 2 dataset. Defaults to None.
-            ego_SE3_city (optional): Used for the conversion between AV2's current seat position and the global position. Defaults to None.
+            ego_SE3_city (optional): Used for converting AV2's current seat position and the global position. Defaults to None.
             map_classes (list, optional): Unified map layer types for perturbations. Defaults to ['boundary', 'divider', 'ped_crossing', 'centerline', 'lane', 'agent'].
             ped_crossing_classes (list, optional): map layer types belonging to the crosswalk. Defaults to ['ped_crossing'].
             contour_classes (list, optional): map layer types that belong to boundaries. Defaults to ['road_segment'].
@@ -106,21 +106,21 @@ class VectorizedMap(object):
             self.delete = True
 
     def gen_vectorized_samples(self, map_geom_dic):
-        """transfor map layers to instance that can be visulized
+        """transfer map layers to the instance that can be visualized
 
         Args:
-            map_geom_dic (dict): geomatry map layer
+            map_geom_dic (dict): geometry map layer
 
         Raises:
-            ValueError: if there is wrong layer type
+            ValueError: if there is a wrong layer type
 
         Returns:
-            dict: geomatry map instance
+            dict: geometry map instance
         """
         map_ins_org_dict = {}
         
         map_ins_org_dict = make_dict(self.vec_classes)
-        # transfer non linestring geom to instance
+        # transfer non line string geom to an instance
         for vec_class in map_geom_dic.keys():
             if vec_class in ['centerline', 'agent']:
                 for v in map_geom_dic[vec_class].values():
@@ -128,7 +128,7 @@ class VectorizedMap(object):
             elif vec_class == 'boundary':
                 map_ins_org_dict[vec_class] = self._poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
             elif vec_class == 'divider':
-                # take from 'divier' and 'lane', merge overlaped and delete duplicated
+                # take from 'divider' and 'lane', merge overlapped and delete duplicated
                 map_ins_org_dict[vec_class] = self._line_geoms_to_instances(map_geom_dic) 
             elif vec_class == 'ped_crossing':
                 continue
@@ -140,7 +140,7 @@ class VectorizedMap(object):
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
 
-        # merge overlaped or connected ped_crossing to one
+        # merge overlapped or connected ped_crossing to one
         if 'ped_crossing' in map_geom_dic:
             map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic['ped_crossing'], map_ins_org_dict)
 
@@ -333,14 +333,14 @@ class VectorizedMap(object):
 
 
 def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch=False, map_path='', output_type='json', mme=False):
-    """tranform orgnaized map layers to vetory, perturbat if necessary.
+    """transform organized map layers to vector, perturbat if necessary.
 
     Args:
         nusc_maps (NuScenesMap): Dataset class in the nuScenes map dataset.
         map_explorer (NuScenesMapExporer): Dataset class in the nuScenes map dataset explorer.
         pertube_vers (list): perturbed versions, each version should be a dict with parameter_names and parameter_values.
         info (dcit): information from the original map 
-        vis_switch (bool): visulization switch
+        vis_switch (bool): visualization switch
         visual (RenderMap): class in map visualization
         map_path (str): output path for saving map data
         output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
@@ -360,7 +360,7 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
         map_trans.tran_args = map_v
         map_trans.ann_name = ann_name
         
-        ## geom level pertubation
+        ## geom level perturbation
         map_trans.perturb_geom_layer(copy.deepcopy(info['map_geom_org_dic']))
         
         ## crop the ready-show vectorized geom by patch_box.
@@ -395,7 +395,7 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
                 trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
                 visual.vis_contours(trans_np_dict_4_vis, ann_name)
 
-        ## crop the ready-show vectorized numpy array by patch_box.
+        ## Crop the ready-show vectorized numpy array by patch_box.
         map_geom_dict = {}
         for vec_class, pt_geom_dic in map_vect_pt_dic.items():
             map_geom_dict[vec_class] = get_vect_in_patch(pt_geom_dic, vector_map.patch_box)

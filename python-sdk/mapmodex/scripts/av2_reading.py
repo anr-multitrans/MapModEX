@@ -246,7 +246,7 @@ def merge_dividers(divider_list):
             inter = o.intersection(pline).area
             o_iof = inter / o.area
             p_iof = inter / pline.area
-            # if query divider is highly overlaped with latter dividers, just remove it
+            # if query divider is highly overlapped with latter dividers, just remove it
             if p_iof >= 0.95:
                 final_pgeom.pop()
                 break

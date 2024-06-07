@@ -19,7 +19,7 @@ def move_polygon_along_polyline(polygon, polyline, move_distance):
     centroid = polygon.centroid
     nearest_point = polyline.interpolate(polyline.project(centroid))
     
-    # Get points at specified distance forward and backward along the polyline
+    # Get points at specified distances forward and backward along the polyline
     forward_point = polyline.interpolate(polyline.project(nearest_point) + move_distance)
     backward_point = polyline.interpolate(polyline.project(nearest_point) - move_distance)
     
@@ -36,7 +36,7 @@ def move_polygon_along_polyline(polygon, polyline, move_distance):
     return moved_polygon_forward, moved_polygon_backward
 
 def merge_polylines_if_same_track(line1, line2):
-    # creat LineString objects
+    # create LineString objects
     # line1 = LineString(polyline1)
     # line2 = LineString(polyline2)
     

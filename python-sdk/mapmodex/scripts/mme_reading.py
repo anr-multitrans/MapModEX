@@ -17,7 +17,7 @@ def creat_mme_infos(root_path, map_version, pertube_vers, out_path, pc_range=[-3
         pertube_vers (list): version of perturbation.
         out_path (_type_): output path.
         pc_range (list, optional): patch box size(3D). Defaults to [-30.0, -15.0, -5.0, 30.0, 15.0, 3.0].
-        vis (bool, optional): visulization. Defaults to False.
+        vis (bool, optional): visualization. Defaults to False.
         output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
     """
     mme_infos = []

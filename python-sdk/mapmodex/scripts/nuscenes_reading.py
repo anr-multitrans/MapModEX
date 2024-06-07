@@ -43,11 +43,11 @@ class MMENuScenesMapExplorer(NuScenesMapExplorer):
 
     def has_equal_list(self, team1, team2):
         """
-        Determine whether there is at least one list in each team that contains the same elements in any order.
+        Determine whether at least one list in each team contains the same elements in any order.
         
-        :param team1: A list of two lists, representing the first team.
-        :param team2: A list of two lists, representing the second team.
-        :return: True if there is at least one list in each team that contains the same elements, False otherwise.
+        :param team1: A list of two lists representing the first team.
+        :param team2: A list of two lists representing the second team.
+        :return: True if at least one list in each team contains the same elements, False otherwise.
         """
         # Iterate through each list in team1
         for list1 in team1:
@@ -69,7 +69,7 @@ def _get_available_scenes(nusc):
         nusc (class): Dataset class in the nuScenes dataset.
 
     Returns:
-        available_scenes (list[dict]): List of basic information for the
+        available_scenes (list[dict]): List of essential information for the
             available scenes.
     """
     available_scenes = []
@@ -175,7 +175,7 @@ def _obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pe
         vis (bool, optional): visulization. Defaults to False.
 
     Returns:
-        dict: infomation includ vectory map layers
+        dict: information include vector map layers
     """
     lidar2ego = np.eye(4)
     lidar2ego[:3, :3] = Quaternion(info['lidar2ego_rotation']).rotation_matrix

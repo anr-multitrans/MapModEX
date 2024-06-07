@@ -1,6 +1,4 @@
-import math
 import os
-import pickle
 import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import messagebox

@@ -421,11 +421,11 @@ def union_line(line_geoms):
 
 
 def keep_non_intersecting_parts(geom_keep, geom_intersect, edge_include=False):
-    # Check if line intersects with polygon
+    # Check if the line intersects with the polygon
     if not geom_keep.intersects(geom_intersect):
         return [geom_keep]
 
-    # If intersection occurs, find the difference
+    # If an intersection occurs, find the difference
     intersecting_part = geom_keep.intersection(geom_intersect)
     difference = geom_keep.difference(intersecting_part)
 
@@ -846,7 +846,7 @@ def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=N
                     else:
                         inter_acc = inter_args
                     
-                    # managing the multi-geometries
+                    # Managing the multi-geometries
                     if instance.geom_type in ['MultiPolygon', 'MultiLineString']:
                         instance = multi_2_single(instance)
                         
@@ -899,26 +899,26 @@ def move_polygons(line, polygons_dic, distance, except_token = []):
         if key in except_token:
             continue
         
-        # 创建多边形对象
+        # Creating a polygon object
         poly = polygon['geom']
 
-        # 计算多边形和线段的交点
+        # Calculate the intersection of a polygon and a line segment
         intersection = poly.intersection(line)
-        # 计算线段的单位向量
+        # Calculate the unit vector of a line segment
         dx = line.coords[1][0] - line.coords[0][0]
         dy = line.coords[1][1] - line.coords[0][1]
         length = (dx ** 2 + dy ** 2) ** 0.5
         ux = dx / length
         uy = dy / length
 
-        # 计算向外移动的距离
+        # Calculate the distance moved outward
         move_x = -uy * distance
         move_y = ux * distance
-        # 如果多边形与线段相交
+        # If the polygon intersects the line segment
         if intersection:
             if poly.geom_type == 'LineString':
                 continue
-            # 将多边形顶点向外移动
+            # Move polygon vertices outward
             if poly.geom_type == 'MultiPolygon':
                 new_poly = []
                 for py in poly.geoms:
@@ -929,7 +929,7 @@ def move_polygons(line, polygons_dic, distance, except_token = []):
                 new_coords = [(x + move_x, y + move_y) for x, y in poly.exterior.coords]
                 new_poly = Polygon(new_coords)
         else:
-            # 如果没有交点，直接向外移动
+            # If there is no intersection, move directly outward
             new_poly = affinity.translate(poly, xoff=move_x, yoff=move_y)
             
         polygon['geom'] = new_poly
@@ -971,7 +971,7 @@ class NuScenesMap4MME(NuScenesMap):
     def _make_shortcuts(self) -> None:
         """ Makes the record shortcuts. """
 
-        # Makes a shortcut between non geometric records to their nodes.
+        # Makes a shortcut between nongeometric records and their nodes.
         for layer_name in self.non_geometric_polygon_layers:
             if layer_name == 'drivable_area':  # Drivable area has more than one geometric representation.
                 pass
@@ -985,7 +985,7 @@ class NuScenesMap4MME(NuScenesMap):
             for record in self.__dict__[layer_name]:
                 record['node_tokens'] = self.get('line', record['line_token'])['node_tokens']
 
-        # Makes a shortcut between stop lines to their cues, there's different cues for different types of stop line.
+        # Makes a shortcut between stop lines to their cues; there are different cues for different types of stop lines.
         # Refer to `_get_stop_line_cue()` for details.
         for record in self.stop_line:
             cue = self._get_stop_line_cue(record)
