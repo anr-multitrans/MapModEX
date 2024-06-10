@@ -120,7 +120,7 @@ class VectorizedMap(object):
         map_ins_org_dict = {}
         
         map_ins_org_dict = make_dict(self.vec_classes)
-        # transfer non line string geom to an instance
+        # transfer non LineString geom to an instance
         for vec_class in map_geom_dic.keys():
             if vec_class in ['centerline', 'agent']:
                 for v in map_geom_dic[vec_class].values():
@@ -316,7 +316,8 @@ class VectorizedMap(object):
         for ext in exteriors:
             if ext.is_ccw:
                 ext.coords = list(ext.coords)[::-1]
-            lines = ext#.intersection(local_patch)
+            # lines = ext.intersection(local_patch)
+            lines = LineString(ext)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
@@ -324,7 +325,8 @@ class VectorizedMap(object):
         for inter in interiors:
             if not inter.is_ccw:
                 inter.coords = list(inter.coords)[::-1]
-            lines = inter#.intersection(local_patch)
+            # lines = inter.intersection(local_patch)
+            lines = LineString(inter)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
@@ -366,13 +368,14 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
         ## crop the ready-show vectorized geom by patch_box.
         trans_dic = {}
         map_ins_dict = {}
-        for vec_class, pt_vect_dic in map_trans.geom_dict.items():
+        geom_dic_copy = copy.deepcopy(map_trans.geom_dict)
+        for vec_class, pt_vect_dic in geom_dic_copy.items():
             map_ins_dict[vec_class] = get_geom_in_patch(map_explorer, pt_vect_dic, vector_map.patch_box)
         trans_dic['map_ins_dic_patch'] = map_ins_dict
         
         ## vectetry level pertubation
         map_trans.perturb_vect_map()
-        map_vect_pt_dic = map_trans.vect_dict
+        map_vect_pt_dic = copy.deepcopy(map_trans.vect_dict)
             
         if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
             map_vect_pt_dic = np_to_geom(map_vect_pt_dic)

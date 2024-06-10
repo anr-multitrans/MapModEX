@@ -293,3 +293,45 @@ def show_geom(new_shape):
         os.exit("wrong geom type: ", new_shape.geom_type)
         
     plt.show()
+
+# Function to add polygons to the plot
+def add_geometry(ax, geom, **kwargs):
+    if geom.is_empty:
+        return
+    if geom.geom_type == 'Polygon':
+        x, y = geom.exterior.xy
+        ax.fill(x, y, **kwargs)
+    elif geom.geom_type == 'MultiPolygon':
+        for poly in geom:
+            x, y = poly.exterior.xy
+            ax.fill(x, y, **kwargs)
+    elif geom.geom_type == 'LineString':
+        x, y = geom.xy
+        ax.plot(x, y, **kwargs)
+    elif geom.geom_type == 'MultiLineString':
+        for line in geom:
+            x, y = line.xy
+            ax.plot(x, y, **kwargs)
+    else:
+        print(f"Warning: Unsupported geometry type {geom.geom_type}")
+
+def show_geoms(geometries):
+
+    # Create a figure and axis for plotting
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    # Plot each geometry in the list
+    for geom in geometries:
+        if isinstance(geom, (Polygon, MultiPolygon, LineString, MultiLineString)):
+            add_geometry(ax, geom, alpha=0.5)
+        else:
+            print(f"Warning: Unsupported geometry {type(geom)}")
+    
+    # Adding titles and labels
+    ax.set_title('Polygons and MultiPolygons on One Canvas')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.grid(True)
+
+    # Show plot
+    plt.show()
