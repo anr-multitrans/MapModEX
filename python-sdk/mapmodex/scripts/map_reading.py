@@ -368,8 +368,9 @@ class GetMapLayerGeom(object):
 
             centerline_dics[centerline_dict['token']] = centerline_dict
 
-        geoms_dict['centerline'] = centerline_dics
-
+        
+        geoms_dict['centerline'], geoms_dict['lane'] = delete_duplicate_centerline(centerline_dics, geoms_dict['lane'])
+            
         return geoms_dict
 
     def get_polyline(self, patch_box, patch_angle, layer_name):

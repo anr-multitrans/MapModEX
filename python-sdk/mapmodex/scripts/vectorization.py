@@ -287,17 +287,31 @@ class VectorizedMap(object):
         return one_type_line_geom_to_instances(results)
 
     def _poly_geoms_to_instances(self, polygon_geom, mme=False):
+        boundary = []
+        lane_connector = []
         polygons = []
         
         if not self.mme:
             if 'boundary' in polygon_geom.keys():
                 for road_dic in polygon_geom['boundary'].values():
-                    polygons.append(road_dic['geom'])
+                    boundary.append(road_dic['geom'])
 
         if 'lane' in polygon_geom.keys():
             for lane_dic in polygon_geom['lane'].values():
                 if lane_dic['from'] != 'lane_connector':
                     polygons.append(lane_dic['geom'])
+                else:
+                    lane_connector.append(lane_dic['geom'])
+                    
+        if len(boundary) and len(lane_connector):
+            union_boundary = ops.unary_union(boundary)
+            for lane_con in lane_connector:
+                if lane_con.intersection(union_boundary):
+                    continue
+                else:
+                    polygons.append(lane_con)
+                    
+        polygons += boundary
 
         union_segments = ops.unary_union(polygons)
         # max_x = self.patch_box[3] / 2

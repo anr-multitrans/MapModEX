@@ -225,31 +225,6 @@ def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
 
     return r_gen.pertu_nusc_infos
 
-def creat_ped_polygon(map_explorer, road_segment_token=None): #FIXME
-    min_x, min_y, max_x, max_y = map_explorer.map_api.get_bounds('road_segment', road_segment_token)
-
-    x_range = max_x - min_x
-    y_range = max_y - min_y
-
-    if max([x_range, y_range]) <= 4:
-        new_polygon = map_explorer.map_api.extract_polygon(map_explorer.map_api.get('road_segment', road_segment_token)['polygon_token'])
-    else:
-        if x_range > y_range:
-            rand = random.uniform(min_x, max_x - 4)
-            left_bottom = Point([rand, min_y])
-            left_top = Point([rand, max_y])
-            right_bottom = Point([rand + 4, min_y])
-            right_top = Point([rand + 4, max_y])
-        else:
-            rand = random.uniform(min_y, max_y - 4)
-            left_bottom = Point([min_x, rand])
-            left_top = Point([min_x, rand + 4])
-            right_bottom = Point([max_x, rand])
-            right_top = Point([max_x, rand + 4])
-
-        new_polygon = Polygon([left_top, left_bottom, right_bottom, right_top])
-
-    return new_polygon
 
 
 class delet_record:
@@ -489,16 +464,17 @@ def get_index(ins_c, threshold=[None, None]):
     if threshold[0]:
         indices = np.where(ins_c > threshold[0])
         try:
-            indices_list.append(list(zip(indices[0], indices[1]))) # Convert the result to a list of index tuples
+            indices_list += list(indices[0]) # Convert the result to a list of index tuples
         except:
             pass
             
     if threshold[1]:
         indices = np.where(ins_c < threshold[1])
         try:
-            indices_list.append(list(zip(indices[0], indices[1])))
+            indices_list += list(indices[0]) # Convert the result to a list of index tuples
         except:
             pass
+    indices_list = list(set(indices_list))
     
     return indices_list
 
@@ -592,13 +568,14 @@ def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, lin
     if line_new_key is None:
         line_new_key = layer_name+'_token'
 
-    line_dict[line_new_key] = []
+    if line_new_key not in line_dict:
+        line_dict[line_new_key] = []
     for key, layer_dic in geoms_dict[layer_name].items():
         if layer_dic['geom'].intersects(line):
             line_dict[line_new_key].append(key)
             if geom_new_key not in layer_dic:
-                layer_dic['centerline_token'] = []
-            layer_dic['centerline_token'].append(line_dict['token'])
+                layer_dic[geom_new_key] = []
+            layer_dic[geom_new_key].append(line_dict['token'])
 
     return line_dict, geoms_dict
 
@@ -759,8 +736,7 @@ def fix_corner(vect, patch_box):
     return threshold_ins(vect, xy_range)
 
 def threshold_ins(vect, xy_range):
-    y = vect.shape[1]
-    for dem in range(vect.shape[1]):
+    for dem in range(2):
         ins_c = vect[:, dem]
         indices_list = get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
     

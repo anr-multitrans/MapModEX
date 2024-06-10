@@ -1,3 +1,6 @@
+import copy
+import math
+import random
 import numpy as np
 from shapely.geometry import Point, LineString
 from shapely.ops import linemerge, unary_union
@@ -116,3 +119,35 @@ def creat_boundray(bd):
         return [new_b_1, new_b_2]
 
     return [new_b_1]
+
+def zoom_patch_by_layers(layer_name, num_layer_elements, tran_args, vect_dict, _zoom_grid, patch_box, fix_corner, _warping):
+    times = math.floor(num_layer_elements[layer_name] * tran_args.wid_lan[1])
+    index_list = random.choices([i for i in range(num_layer_elements[layer_name])], k=times)
+
+    for ind, ele in enumerate(vect_dict[layer_name]):
+        if ind in index_list:
+            widen_area = (ele[:, 0].min(), ele[:, 1].min(),ele[:, 0].max(), ele[:, 1].max())
+            g_xv, g_yv = _zoom_grid(patch_box, tran_args.wid_lan[2], widen_area)
+
+            for key in vect_dict.keys():
+                if len(vect_dict[key]):
+                    for ind, ins in enumerate(vect_dict[key]):
+                        ins = fix_corner(ins, [0, 0, patch_box[2], patch_box[3]])
+                        vect_dict[key][ind] = _warping(ins, g_xv, g_yv)
+
+def delete_duplicate_centerline(centerline_dict, lane_dict):
+    cl_list = [copy.deepcopy(cl_dic) for cl_dic in centerline_dict.values()]
+    
+    for ind, cl_dic in enumerate(cl_list):
+        cl_lane_list = set(cl_dic['lane_token'])
+        next_ind = ind + 1
+        while next_ind < len(cl_list):
+            tem_cl_lane_list = set(cl_list[next_ind]['lane_token'])
+            if cl_lane_list == tem_cl_lane_list:
+                centerline_dict.pop(cl_dic['token'])
+                for lane_token in cl_dic['lane_token']:
+                    lane_dict[lane_token]['centerline_token'].remove(cl_dic['token'])
+                break
+            next_ind += 1
+            
+    return centerline_dict, lane_dict
