@@ -413,7 +413,7 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
 
             info[map_json_name] = vector_to_map_json(trans_dic, info, map_json_name, map_path) #TODO use pt-vect
 
-        info[ann_name] = map_vect_pt_dic
+        info[ann_name] = map_geom_dict
     
     return info
 

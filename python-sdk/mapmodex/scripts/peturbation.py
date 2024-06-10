@@ -501,7 +501,8 @@ class MapTransform:
                     new_point_list = []
                     for point in vect:
                         x = point[0] * math.cos(angle) - point[1] * math.sin(angle)
-                        y = point[1] * math.sin(angle) + point[1] * math.cos(angle)
+                        y = point[0] * math.sin(angle) + point[1] * math.cos(angle)
+                        
                         new_point_list.append([x, y])
 
                     self.vect_dict[layer][ind] = np.array(new_point_list)
@@ -787,17 +788,17 @@ class MapTransform:
         """Perturb the map vector layer: image algorithms acting on numpy arrays"""
         self.vect_dict = geom_to_np(self.geom_dict, inter=True)
 
-        # if self.tran_args.shi_pat[0]:
-        #     self.shift_map()
-        #     self.truncate_and_save('vect', '8_shift_map')
+        if self.tran_args.shi_pat[0]:
+            self.shift_map()
+            self.truncate_and_save('vect', '8_shift_map')
             
-        # if self.tran_args.rot_pat[0]:
-        #     self.rotate_map()
-        #     self.truncate_and_save('vect', '9_rotate_map')
+        if self.tran_args.rot_pat[0]:
+            self.rotate_map()
+            self.truncate_and_save('vect', '9_rotate_map')
             
-        # if self.tran_args.sca_pat[0]:
-        #     self.flip_map() #TOFIX
-        #     self.truncate_and_save('vect', '10_flip_map')
+        if self.tran_args.sca_pat[0]:
+            self.flip_map() #TOFIX
+            self.truncate_and_save('vect', '10_flip_map')
         
         if self.tran_args.def_pat_tri[0]:
             self.difromate_map()
@@ -839,9 +840,9 @@ class MapTransform:
             self.delete_layers('divider', self.tran_args.del_div)
             self.truncate_and_save('geom', '6_delet_divider')
         
-        if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
-            self.affine_transform_patch()
-            self.truncate_and_save('geom', '7_affine_transform_map')
+        # if any(getattr(self.tran_args, pat)[0] for pat in ['rot_pat', 'sca_pat', 'shi_pat']): #FIXME
+        #     self.affine_transform_patch()
+        #     self.truncate_and_save('geom', '7_affine_transform_map')
         
         self.geom_dict_for_json = copy.deepcopy(self.geom_dict)
         self.geom_dict = self.vector_map.gen_vectorized_samples(self.geom_dict)
