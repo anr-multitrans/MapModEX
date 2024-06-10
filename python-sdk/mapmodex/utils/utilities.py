@@ -563,6 +563,27 @@ def check_isolated(layer_dic, check_layers=[], keep_interected=False):
 
     return layer_dic
 
+def check_isolated_new(layer_dict, check_layers=[], keep_interected=False):
+    if bool(layer_dict):
+        
+        layer_dic = copy.deepcopy(layer_dict)
+        # conbine checker
+        checker_geom = []
+        for check_layer in check_layers:
+            checker_geom.append(unary_union([check_layer_dic['geom'] for check_layer_dic in check_layer.values()]))
+        
+        checker_geom = unary_union(checker_geom)
+        
+        for lane_divider in layer_dic.values():
+            new_divider = lane_divider['geom'].intersection(checker_geom)
+            
+            if new_divider:
+                if keep_interected:
+                    layer_dict[lane_divider['token']]['geom'] = new_divider
+                else:
+                    layer_dict.pop(lane_divider['token'])
+
+    return layer_dict
 
 def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
     if line_new_key is None:

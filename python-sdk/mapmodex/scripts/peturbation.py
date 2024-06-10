@@ -458,7 +458,7 @@ class MapTransform:
         # check unreasonable: remove isolated element
         road_segments = check_isolated(road_segments, [centerlines])
         lane_dividers = check_isolated(lane_dividers, [road_segments, lanes])
-        ped_crossings = check_isolated(ped_crossings, [road_segments, lanes], True)
+        ped_crossings = check_isolated_new(ped_crossings, [road_segments, lanes], True)
 
     def affine_transform_centerline(self):
         """Affine tranform a path: a center line w/ lanes and crosswalks in series"""
