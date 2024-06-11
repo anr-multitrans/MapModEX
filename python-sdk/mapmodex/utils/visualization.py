@@ -320,6 +320,9 @@ def show_geoms(geometries):
     # Create a figure and axis for plotting
     fig, ax = plt.subplots(figsize=(8, 6))
 
+    if isinstance(geometries, dict):
+        geometries = [element['geom'] for element in geometries.values()]
+    
     # Plot each geometry in the list
     for geom in geometries:
         if isinstance(geom, (Polygon, MultiPolygon, LineString, MultiLineString)):

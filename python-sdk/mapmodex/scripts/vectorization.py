@@ -147,7 +147,7 @@ class VectorizedMap(object):
 
         # merge overlapped or connected ped_crossing to one
         if 'ped_crossing' in map_geom_dic:
-            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic['ped_crossing'], map_ins_org_dict)
+            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic, map_ins_org_dict)
 
         if 'divider' in map_ins_org_dict.keys():
             new_dividers = []
@@ -248,25 +248,33 @@ class VectorizedMap(object):
 
         return line_instances
 
-    def ped_poly_geoms_to_instances(self, ped_geom, map_ins_dict=[]):
+    def ped_poly_geoms_to_instances(self, map_geom_dict, map_ins_dict):
+        ped_crossings = map_geom_dict['ped_crossing']
+        road_segments = map_geom_dict['boundary']
+        lanes = map_geom_dict['lane']
+        
+        ped_crossings = check_isolated_new(ped_crossings, [road_segments, lanes], True)
+        
         ped = []
-
-        for ped_dic in ped_geom.values():
-            if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
-                if ped_dic['from'] == 'new':
-                    for bon in map_ins_dict['boundary']:
-                        if bon.intersection(ped_dic['geom']):
-                            if_inter_divider = False
-                            for div in map_ins_dict['divider']:
-                                if div.intersection(ped_dic['geom']):
-                                    if_inter_divider = True
-                                    break
-                            if not if_inter_divider:
-                                ped.append(ped_dic['geom'])
-                                break
-                else:
-                    ped.append(ped_dic['geom'])
-
+        for ped_dic in ped_crossings.values():
+            # if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
+            if ped_dic['from'] == 'new':
+                for bon in map_ins_dict['boundary']:
+                    if bon.intersection(ped_dic['geom'].buffer(0.1)):
+                        ped.append(ped_dic['geom'])
+                        break
+                        # if_inter_divider = False
+                        # for div in map_ins_dict['divider']:
+                        #     if div.intersection(ped_dic['geom']):
+                        #         if_inter_divider = True
+                        #         break
+                        # if not if_inter_divider:
+                        #     ped.append(ped_dic['geom'])
+                        #     break
+            else:
+                ped.append(ped_dic['geom'])
+        
+        # ped = [p['geom'] for p in ped_crossings.values()]
         union_segments = ops.unary_union(ped)
         
         # max_x = self.patch_box[3] / 2

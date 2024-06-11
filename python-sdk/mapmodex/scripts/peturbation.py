@@ -114,14 +114,14 @@ class MapTransform:
         self.ann_name = 'ann'
         self.num_layer_elements = count_layer_element(geom_dict)
 
-    def _creat_ped_polygon(self,road_segment_token=None):
-        min_x, min_y, max_x, max_y = self.map_explorer.map_api.get_bounds('road_segment', road_segment_token)
+    def _creat_ped_polygon(self, road_segment):
+        min_x, min_y, max_x, max_y = road_segment.bounds
 
         x_range = max_x - min_x
         y_range = max_y - min_y
 
         if max([x_range, y_range]) <= 4:
-            new_polygon = self.map_explorer.map_api.extract_polygon(self.map_explorer.map_api.get('road_segment', road_segment_token)['polygon_token'])
+            new_polygon = road_segment
         else:
             if x_range > y_range:
                 rand = random.uniform(min_x, max_x - 4)
@@ -390,8 +390,8 @@ class MapTransform:
             # for key in self.delet_centerlines.keys():
             #     delet_centerline = centerlines.pop(key)
 
-        # check if there are map layers in use after remove centerlines
-        # remove a centerline need also to remove it's token from connected lanes and ped_crossings
+        # check if there are map layers in use after removing centerlines
+        # remove a centerline need also to remove its token from connected lanes and ped_crossings
         # if a lane or ped_crossing connected no centerline, it should be removed
         delet_lanes = []
         for del_cl in self.delet_centerlines:
@@ -412,7 +412,7 @@ class MapTransform:
 
         # check if there are agents in use or need an update after removing a lane
         # remove a lane need also to remove connected agent and agent trajectory
-        # If a agent exits but is trajectory nolonger being used, update it
+        # If an agent exits but is trajectory longer being used, update it
         for del_lane in delet_lanes:
             if 'agent_eco_token' in del_lane.keys():
                 for agent_token in del_lane['agent_eco_token']:
@@ -437,7 +437,7 @@ class MapTransform:
         for ag_token in del_agents:
             agents.pop(ag_token)
         
-        # check if there are dividers are in use
+        # check if there are dividers in use
         delet_dividers = []
         for delet_lane in delet_lanes:
             for divider_token in ['left_lane_divider_token', 'right_lane_divider_token']:
@@ -527,45 +527,6 @@ class MapTransform:
                     self.geom_dict_croped[layer] = moved_polylines
 
         self.geom_dict_croped['centerline'] = [geom['geom'] for geom in centerline_dict.values()]
-            # index_avaliable = [str(i) for i in range(len(self.geom_dict['centerline']))]
-            
-            # centerline_dict = {}
-            # for ind, cl in enumerate(self.geom_dict['centerline']):
-            #     centerline_dict[str(ind)] = cl
-            
-            # for _ in range(times):
-            #     if index_avaliable:
-            #         chosen_index = random.choice(index_avaliable)
-            #         index_avaliable.remove(chosen_index)
-            #     else:
-            #         break
-        
-            #     centerline = centerline_dict[chosen_index]
-            #     centerline_center = Point(centerline.centroid)
-            #     for k, polylines in self.geom_dict.items():
-            #         moved_polylines = []
-                    
-            #         if k != 'centerline':
-            #             for i, polyline in enumerate(polylines):
-            #                 moved_polyline = move_geom(centerline_center, polyline, move_distance)
-            #                 geom = valid_geom(moved_polyline, self.map_explorer, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-            #                 if geom:
-            #                     moved_polylines.append(geom)
-            #         else:
-            #             remove_index = []
-            #             for i, polyline in enumerate(centerline_dict.values()):
-            #                 if str(i) in index_avaliable:
-            #                     moved_polyline = move_geom(centerline_center, polyline, move_distance)
-            #                     geom = valid_geom(moved_polyline, self.map_explorer, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-            #                     if geom:
-            #                         moved_polylines.append(geom)
-            #                     else:
-            #                         remove_index.append(str(i))
-            #             moved_polylines.append(centerline)
-            #             for id in remove_index:
-            #                 index_avaliable.remove(id)
-                            
-            #         self.geom_dict[k] = moved_polylines
     
     def adjust_boundary(self):
         """Widen or narrow the boundaries"""
@@ -625,14 +586,14 @@ class MapTransform:
         if self.tran_args.diy:
             selected_road_seg = geometry_manager(self.geom_dict, 'boundary', ['ped_crossing', 'divider'])
         else:
-            times = math.ceil(len(self.geom_dict['boundary']) * self.tran_args.add_lan[1])
+            times = math.ceil(len(self.geom_dict['boundary']) * self.tran_args.add_ped[1])
             if times == 0:
                 return self.geom_dict
 
             selected_road_seg = random_select_element(self.geom_dict['boundary'], times)
             
         for road_seg in selected_road_seg:
-            new_ped = self._creat_ped_polygon(road_seg['token'])
+            new_ped = self._creat_ped_polygon(road_seg['geom'])
             new_ped_dic = layer_dict_generator(new_ped, source='new')
             self.geom_dict['ped_crossing'][new_ped_dic['token']] = new_ped_dic #new centerline
             
