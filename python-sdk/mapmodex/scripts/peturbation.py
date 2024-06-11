@@ -448,16 +448,20 @@ class MapTransform:
             for road_dic in road_segments.values():
                 new_road_seg = keep_non_intersecting_parts(
                     road_dic['geom'], delet_lane['geom'])
-                if len(new_road_seg):
+                if len(new_road_seg) == 1:
                     road_dic['geom'] = new_road_seg[0]
+                elif len(new_road_seg) > 1:
+                    road_dic['geom'] = MultiPolygon(new_road_seg)
+                else:
+                    continue
 
         for token in delet_dividers:
             if token in lane_dividers:
                 lane_dividers.pop(token)
 
         # check unreasonable: remove isolated element
-        road_segments = check_isolated(road_segments, [centerlines])
-        lane_dividers = check_isolated(lane_dividers, [road_segments, lanes])
+        road_segments = check_isolated_new(road_segments, [centerlines])
+        lane_dividers = check_isolated_new(lane_dividers, [road_segments, lanes])
         ped_crossings = check_isolated_new(ped_crossings, [road_segments, lanes], True)
 
     def affine_transform_centerline(self):

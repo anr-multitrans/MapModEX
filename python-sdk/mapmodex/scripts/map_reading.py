@@ -38,57 +38,6 @@ class GetMapLayerGeom(object):
         # self.delete_record = delet_record(
         #     self.map_explorer, self.pertu_nusc_infos)
 
-    def gen_vectorized_samples_by_pt_json(self, patch_box=[0, 0, 60, 30], patch_angle=0):   #TODO
-        # get transformed gt map layers
-        patch_box = [0, 0, 60, 30]
-        patch_angle = 0
-
-        for vec_class in self.vec_classes:
-            line_geom = self.get_polyline(patch_box, patch_angle, vec_class)
-                            
-        left_lane_dict = {}
-        right_lane_dict = {}
-        for key, value in ls_dict['lane'].items():
-            if not value['ls'].is_intersection:
-                if value['ls'].left_neighbor_id is not None:
-                    left_lane_dict[key] = dict(
-                        polyline=value['ls'].left_lane_boundary,
-                        predecessors=value['ls'].predecessors,
-                        successors=value['ls'].successors,
-                        left_neighbor_id=value['ls'].left_neighbor_id,
-                    )
-                    value['left_lane_divider'] = LineString(
-                        value['ls'].left_lane_boundary.xyz)
-                if value['ls'].right_neighbor_id is not None:
-                    right_lane_dict[key] = dict(
-                        polyline=value['ls'].right_lane_boundary,
-                        predecessors=value['ls'].predecessors,
-                        successors=value['ls'].successors,
-                        right_neighbor_id=value['ls'].right_neighbor_id,
-                    )
-                    value['right_lane_divider'] = LineString(
-                        value['ls'].right_lane_boundary.xyz)
-
-        for key, value in left_lane_dict.items():
-            if value['left_neighbor_id'] in right_lane_dict.keys():
-                del right_lane_dict[value['left_neighbor_id']]
-
-        for key, value in right_lane_dict.items():
-            if value['right_neighbor_id'] in left_lane_dict.keys():
-                del left_lane_dict[value['right_neighbor_id']]
-
-        for key, value in left_lane_dict.items():
-            value['centerline'] = value['polyline']
-
-        for key, value in right_lane_dict.items():
-            value['centerline'] = value['polyline']
-
-        left_paths = get_path(left_lane_dict)
-        right_paths = get_path(right_lane_dict)
-        local_divider = left_paths + right_paths
-
-        return local_divider, ls_dict
-
     def generate_nearby_centerlines(self, avm, ls_dict):
         from av2.map.map_primitives import Polyline
         for key, value in ls_dict.items():
@@ -139,9 +88,9 @@ class GetMapLayerGeom(object):
         local_centerline_paths = final_centerline_paths
         return local_centerline_paths
 
-    def extract_local_divider(self, ego_SE3_city, patch_box, patch_angle, ls_dict):
+    def extract_local_divider(self, ego_SE3_city, ls_dict):
         nearby_dividers, ls_dict = self.generate_nearby_dividers(ls_dict)
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
 
         line_list_dic = {}
         for line in nearby_dividers:
@@ -168,8 +117,8 @@ class GetMapLayerGeom(object):
         ls_dict['divider'] = line_list_dic
         return ls_dict
 
-    def extract_local_ped_crossing(self, avm, ego_SE3_city, patch_box, patch_angle):
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+    def extract_local_ped_crossing(self, avm, ego_SE3_city):
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
 
         polygon_list_dic = {}
         for pc in avm.get_scenario_ped_crossings():
@@ -214,9 +163,9 @@ class GetMapLayerGeom(object):
 
         return polygon_list_dic
 
-    def extract_local_boundary(self, avm, ego_SE3_city, patch_box, patch_angle):
+    def extract_local_boundary(self, avm, ego_SE3_city):
         boundary_list = []
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
         for da in avm.get_scenario_vector_drivable_areas():
             boundary_list.append(da.xyz)
 
@@ -263,8 +212,8 @@ class GetMapLayerGeom(object):
 
         return polygon_list_dic
 
-    def extract_local_lane(self, avm, patch_box, patch_angle):
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+    def extract_local_lane(self, avm):
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
         scene_ls_list = avm.get_scenario_lane_segments()
         scene_ls_dict = dict()
         for ls in scene_ls_list:
@@ -286,11 +235,11 @@ class GetMapLayerGeom(object):
 
         return ls_dict
 
-    def extract_local_centerline(self, avm, ego_SE3_city, patch_box, patch_angle, ls_dict):
+    def extract_local_centerline(self, avm, ego_SE3_city, ls_dict):
         nearby_centerlines = self.generate_nearby_centerlines(
             avm, ls_dict['lane'])
 
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
         line_list_dic = {}
         for line in nearby_centerlines:
             if line.is_empty:  # Skip lines without nodes.
@@ -373,17 +322,17 @@ class GetMapLayerGeom(object):
             
         return geoms_dict
 
-    def get_polyline(self, patch_box, patch_angle, layer_name):
+    def get_polyline(self, layer_name):
         if layer_name not in self.map_explorer.map_api.non_geometric_line_layers:
             raise ValueError("{} is not a line layer".format(layer_name))
 
         if layer_name == 'traffic_light':
             return None
 
-        patch_x = patch_box[0]
-        patch_y = patch_box[1]
+        patch_x = self.patch_box[0]
+        patch_y = self.patch_box[1]
 
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
 
         line_list_dic = {}
         records = getattr(self.map_explorer.map_api, layer_name)
@@ -394,7 +343,7 @@ class GetMapLayerGeom(object):
 
             new_line = line.intersection(patch)
             if not new_line.is_empty:
-                line = to_patch_coord(line, patch_angle, patch_x, patch_y)
+                line = to_patch_coord(line, self.patch_angle, patch_x, patch_y)
                 line_dic = {}
                 line_dic.update(record)
                 line_dic['geom'] = line
@@ -408,26 +357,27 @@ class GetMapLayerGeom(object):
 
         return line_list_dic
 
-    def get_map_geom(self, patch_box, patch_angle, layer_names):
+    def get_map_geom(self, layer_names):
         map_geom = {}
         for layer_name in layer_names:
             if layer_name in self.line_classes:
-                geoms = self.get_polyline(
-                    patch_box, patch_angle, layer_name)
+                geoms = self.get_polyline(layer_name)
             elif layer_name in self.polygon_classes:
-                geoms = self.get_polygone(
-                    patch_box, patch_angle, layer_name)
+                geoms = self.get_polygone(layer_name)
 
             map_geom.update(geoms)
 
         return map_geom
 
-    def _valid_polygon(self, polygon, patch, patch_angle, patch_x, patch_y, record, layer_name, polygon_list_dic):
+    def _valid_polygon(self, polygon, patch, record, layer_name, polygon_list_dic):
+        patch_x = self.patch_box[0]
+        patch_y = self.patch_box[1]
+
         if polygon.is_valid:
             new_polygon = polygon.intersection(patch)
             if not new_polygon.is_empty:
                 polygon = to_patch_coord(
-                    polygon, patch_angle, patch_x, patch_y)
+                    polygon, self.patch_angle, patch_x, patch_y)
                 if polygon.geom_type == 'Polygon':
                     polygon = MultiPolygon([polygon])
                 polygon_dic = {}
@@ -443,14 +393,11 @@ class GetMapLayerGeom(object):
                     
         return polygon_list_dic
 
-    def get_polygone(self, patch_box, patch_angle, layer_name):
+    def get_polygone(self, layer_name):
         if layer_name not in self.map_explorer.map_api.lookup_polygon_layers:
             raise ValueError('{} is not a polygonal layer'.format(layer_name))
 
-        patch_x = patch_box[0]
-        patch_y = patch_box[1]
-
-        patch = self.map_explorer.get_patch_coord(patch_box, patch_angle)
+        patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
 
         records = getattr(self.map_explorer.map_api, layer_name)
 
@@ -461,14 +408,30 @@ class GetMapLayerGeom(object):
                     polygon_token) for polygon_token in record['polygon_tokens']]
 
                 for polygon in polygons:
-                    polygon_list_dic = self._valid_polygon(polygon, patch, patch_angle, patch_x, patch_y, record, layer_name, polygon_list_dic)
+                    polygon_list_dic = self._valid_polygon(polygon, patch, record, layer_name, polygon_list_dic)
         else:
             for ind, record in enumerate(records):
                 polygon = self.map_explorer.map_api.extract_polygon(record['polygon_token'])
-                polygon_list_dic = self._valid_polygon(polygon, patch, patch_angle, patch_x, patch_y, record, layer_name, polygon_list_dic)
+                polygon_list_dic = self._valid_polygon(polygon, patch, record, layer_name, polygon_list_dic)
 
         return polygon_list_dic
 
+    def add_isolated_connector(self, map_geom_org_dic):
+        if len(map_geom_org_dic['boundary']):
+            for lane_dic in map_geom_org_dic['lane'].values():
+                if lane_dic['from'] == 'lane_connector':
+                    check_intersection = 0
+                    for bd in map_geom_org_dic['boundary'].values():
+                        if lane_dic['geom'].intersection(bd['geom']):
+                            check_intersection = 1
+                            break
+                    
+                    if not check_intersection:
+                        lane_dic['from'] == ['lane_connector_i']
+                        
+        return map_geom_org_dic
+        
+        
 # main function
 class get_vec_map():
     """transfer original data from map database to vector map, perturbation is optional."""
@@ -549,49 +512,41 @@ class get_vec_map():
         map_geom_org_dic = {}
         for vec_class in self.vec_classes:
             if vec_class == 'boundary':  # road_segment
-                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                    self.patch_box, self.patch_angle, ['road_segment'])
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['road_segment'])
             elif vec_class == 'lane':  # road_divider, lane_divider
-                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                    self.patch_box, self.patch_angle, ['lane', 'lane_connector'])
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['lane', 'lane_connector'])
             elif vec_class == 'divider':  # road_divider, lane_divider
-                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                    self.patch_box, self.patch_angle, ['road_divider', 'lane_divider']) #, 'lane_divider'])
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['road_divider', 'lane_divider']) #, 'lane_divider'])
                 # map_geom_org_dic['lane'] = self.get_geom._get_lane_divider(map_geom_org_dic['lane'])
             elif vec_class == 'ped_crossing':  # oed_crossing
-                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(
-                    self.patch_box, self.patch_angle, ['ped_crossing'])
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['ped_crossing'])
             elif vec_class == 'centerline':  # lane, connector
                 map_geom_org_dic[vec_class] = self.get_geom._get_centerline(map_geom_org_dic['lane'])
                 map_geom_org_dic = self.get_geom.get_centerline_line(map_geom_org_dic)
             elif vec_class == 'agent':
-                agents_trajectory = get_nuscenes_trajectory(
-                    self.nusc, self.info['token'], ['vehicle'], type='geom')
-                map_geom_org_dic[vec_class] = add_tra_to_vecmap(
-                    agents_trajectory, self.map_explorer, self.patch_box, self.patch_angle)
+                agents_trajectory = get_nuscenes_trajectory(self.nusc, self.info['token'], ['vehicle'], type='geom')
+                map_geom_org_dic[vec_class] = add_tra_to_vecmap(agents_trajectory, self.map_explorer, self.patch_box, self.patch_angle)
                 map_geom_org_dic = get_agent_info(map_geom_org_dic)
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
+        
+        map_geom_org_dic = self.get_geom.add_isolated_connector(map_geom_org_dic)
+        
         return map_geom_org_dic
     
     def _get_map_av2(self):
         map_geom_org_dic = {}
         for vec_class in self.vec_classes:
             if vec_class == 'ped_crossing':  # oed_crossing
-                map_geom_org_dic[vec_class] = self.get_geom.extract_local_ped_crossing(
-                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_ped_crossing(self.avm, self.ego_SE3_city)
             elif vec_class == 'boundary':  # road_segment
-                map_geom_org_dic[vec_class] = self.get_geom.extract_local_boundary(
-                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle)
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_boundary(self.avm, self.ego_SE3_city)
             elif vec_class == 'lane':  # lane, connector
-                map_geom_org_dic[vec_class] = self.get_geom.extract_local_lane(
-                    self.avm, self.patch_box, self.patch_angle)
+                map_geom_org_dic[vec_class] = self.get_geom.extract_local_lane(self.avm)
             elif vec_class == 'centerline':  # lane, connector
-                map_geom_org_dic = self.get_geom.extract_local_centerline(
-                    self.avm, self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
+                map_geom_org_dic = self.get_geom.extract_local_centerline(self.avm, self.ego_SE3_city, map_geom_org_dic)
             elif vec_class == 'divider':  # road_divider, lane_divider
-                map_geom_org_dic = self.get_geom.extract_local_divider(
-                    self.ego_SE3_city, self.patch_box, self.patch_angle, map_geom_org_dic)
+                map_geom_org_dic = self.get_geom.extract_local_divider(self.ego_SE3_city, map_geom_org_dic)
             elif vec_class == 'agent':
                 map_geom_org_dic[vec_class] = {}  # TODO
             else:
@@ -604,7 +559,7 @@ class get_vec_map():
         map_geom_org_dic = {}
         for vec_class in self.vec_classes:
             if vec_class in ['boundary', 'lane', 'divider', 'ped_crossing', 'centerline', 'agent']:
-                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(self.patch_box, self.patch_angle, [vec_class])
+                map_geom_org_dic[vec_class] = self.get_geom.get_map_geom([vec_class])
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
             

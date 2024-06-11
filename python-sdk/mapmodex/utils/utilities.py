@@ -9,7 +9,7 @@ import shutil
 import sys
 import warnings
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon, LineString, Point
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 from shapely import ops, affinity
 import networkx as nx
 from nuscenes.map_expansion.map_api import NuScenesMap
@@ -549,62 +549,66 @@ def update_lane(lane_and_connectors, incoming_left, outgoing_left, new_lane_and_
 
     return new_lane_and_connectors, new_lanes
 
+def get_intersection(geom, it_geom, type='multi', keep_it_only=False):
+    new_ccgd = []
+    for ccgd_g in geom.geoms:
+        for c_g in it_geom:
+            if ccgd_g.intersection(c_g):
+                if keep_it_only:
+                    new_ccgd.append(ccgd_g.intersection(c_g))
+                else:
+                    new_ccgd.append(ccgd_g)
+                    
+    return new_ccgd
 
-def check_isolated(layer_dic, check_layers=[], keep_interected=False):
-    if bool(layer_dic):
-        delet_layer_token = []
-        for k, lane_divider in layer_dic.items():
-            if keep_interected:
-                interected_list = []
-            check_divider = 0
-            for check_layer in check_layers:
-                for check_layer_dic in check_layer.values():
-                    new_divider = lane_divider['geom'].intersection(
-                        check_layer_dic['geom'])
-                    if new_divider:
-                        check_divider = 1
-
-                        if keep_interected:
-                            interected_list.append(new_divider)
-                            # lane_divider['geom'] = new_divider
-                        else:
-                            break
-
-                if check_divider:
-                    if keep_interected:
-                        lane_divider['geom'] = ops.unary_union(interected_list)
-                    else:
-                        break
-
-            if not check_divider:
-                delet_layer_token.append(k)
-
-        for token in delet_layer_token:
-            layer_dic.pop(token)
-
-    return layer_dic
-
-def check_isolated_new(layer_dict, check_layers=[], keep_interected=False):
-    if bool(layer_dict):
+def check_isolated_new(check_geom_dict, intersect_geom_dict_list=[], keep_intersect_only=False):
+    if bool(check_geom_dict):
         
-        layer_dic = copy.deepcopy(layer_dict)
+        copied_cgd = copy.deepcopy(check_geom_dict)
+        
         # conbine checker
         checker_geom = []
-        for check_layer in check_layers:
-            checker_geom.append(unary_union([check_layer_dic['geom'] for check_layer_dic in check_layer.values()]))
+        for check_layer in intersect_geom_dict_list:
+            if len(check_layer):
+                checker_geom.append(unary_union([check_copied_cgd['geom'] for check_copied_cgd in check_layer.values()]))
         
-        checker_geom = unary_union(checker_geom)
-        
-        for lane_divider in layer_dic.values():
-            new_divider = lane_divider['geom'].intersection(checker_geom)
+        # if not len(checker_geom):
+        #     return {}
             
-            if new_divider:
-                if keep_interected:
-                    layer_dict[lane_divider['token']]['geom'] = new_divider
+        # checker_geom = unary_union(checker_geom)
+        
+        for ccgd in copied_cgd.values():
+            if ccgd['geom'].geom_type == 'MultiLineString':
+                new_ccgd = get_intersection(ccgd['geom'], checker_geom, keep_it_only=keep_intersect_only)
+                if len(new_ccgd) > 1:
+                   check_geom_dict[ccgd['token']]['geom'] = unary_union(new_ccgd)
+                elif len(new_ccgd) == 1:
+                   check_geom_dict[ccgd['token']]['geom'] = new_ccgd[0]
                 else:
-                    layer_dict.pop(lane_divider['token'])
+                   check_geom_dict.pop(ccgd['token'])                  
+            
+            elif ccgd['geom'].geom_type == 'MultiPolygon':
+                new_ccgd = get_intersection(ccgd['geom'], checker_geom, keep_it_only=keep_intersect_only)
+                if len(new_ccgd) > 1:
+                   check_geom_dict[ccgd['token']]['geom'] = unary_union(new_ccgd)
+                elif len(new_ccgd) == 1:
+                   check_geom_dict[ccgd['token']]['geom'] = new_ccgd[0]
+                else:
+                   check_geom_dict.pop(ccgd['token'])                  
+            
+            elif ccgd['geom'].geom_type in ['Polygon', 'LineString']:
+                check_it = 0
+                for c_g in checker_geom:
+                    if ccgd['geom'].intersection(c_g):
+                        check_it = 1
+                        if keep_intersect_only:
+                            check_geom_dict[ccgd['token']]['geom'] = ccgd['geom'].intersection(c_g)
+                        break
+                
+                if not check_it:    
+                    check_geom_dict.pop(ccgd['token'])                  
 
-    return layer_dict
+    return check_geom_dict
 
 def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
     if line_new_key is None:
@@ -620,7 +624,6 @@ def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, lin
             layer_dic[geom_new_key].append(line_dict['token'])
 
     return line_dict, geoms_dict
-
 
 def get_path(ls_dict):
     pts_G = nx.DiGraph()

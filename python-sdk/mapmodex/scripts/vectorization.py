@@ -154,7 +154,7 @@ class VectorizedMap(object):
             for line in map_ins_org_dict['divider']:
                 divider_check = 1
                 for boundary in map_ins_org_dict['boundary']:
-                    if line.intersection(boundary):
+                    if line.buffer(0.3).intersection(boundary):
                         divider_check = 0
                         break
 
@@ -311,7 +311,7 @@ class VectorizedMap(object):
         if not self.mme:
             if 'boundary' in polygon_geom.keys():
                 for road_dic in polygon_geom['boundary'].values():
-                    boundary.append(road_dic['geom'])
+                    boundary.append(road_dic['geom'].buffer(0.1))
 
         if 'lane' in polygon_geom.keys():
             for lane_dic in polygon_geom['lane'].values():
