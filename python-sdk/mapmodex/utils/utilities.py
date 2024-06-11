@@ -225,6 +225,16 @@ def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
 
     return r_gen.pertu_nusc_infos
 
+def delete_elements_by_indices(data_list, indices):
+    # Ensure indices are sorted in descending order to avoid shifting issues
+    indices_sorted = sorted(indices, reverse=True)
+    
+    # Delete elements at the specified indices
+    for index in indices_sorted:
+        if 0 <= index < len(data_list):
+            del data_list[index]
+    
+    return data_list
 
 
 class delet_record:
@@ -444,8 +454,19 @@ def get_geom_in_patch(map_explorer, geoms, patch_box=[0, 0, 60, 30], patch_angle
             except:
                 geom['geom'] = make_valid(geom['geom']).intersection(patch)
     elif isinstance(geoms, list):
-        for ind in range(len(geoms)):
-            geoms[ind] = geoms[ind].intersection(patch)
+        new_list = []
+        for geom in geoms:
+            new_geom = geom.intersection(patch)
+            if new_geom:
+                if new_geom.geom_type in ['MultiPolygon', 'MultiLineString']:
+                    new_list += [gm for gm in new_geom.geoms]
+                elif new_geom.geom_type in ['Polygon', 'LineString']:
+                    new_list.append(new_geom)
+                else:
+                    continue
+        geoms = new_list
+        # for ind in range(len(geoms)):
+        #     geoms[ind] = geoms[ind].intersection(patch)
     else:
         sys.exit('wrong data type')
 

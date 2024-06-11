@@ -151,3 +151,51 @@ def delete_duplicate_centerline(centerline_dict, lane_dict):
             next_ind += 1
             
     return centerline_dict, lane_dict
+
+def remove_polyline_overlap(line):
+    """
+    Remove overlapping segments from a polyline, represented by a list of (x, y) coordinates.
+    
+    Args:
+    - coords: list of tuples representing (x, y) coordinates of the polyline.
+
+    Returns:
+    - list: New polyline without overlapping segments.
+    """
+    coords = list(line.coords)
+    
+    if len(coords) < 2:
+        return coords  # A polyline with fewer than 2 points cannot overlap
+
+    line_segments = []
+
+    # Create line segments
+    for i in range(len(coords) - 1):
+        segment = LineString([coords[i], coords[i + 1]])
+        line_segments.append(segment)
+    
+    non_overlapping_segments = []
+    # seen_segments = set()
+
+    # Iterate through segments and keep only non-overlapping ones
+    for i, segment1 in enumerate(line_segments):
+        is_overlapping = False
+        for j, segment2 in enumerate(line_segments):
+            if i != j and segment1.overlaps(segment2):
+                is_overlapping = True
+                break
+        if not is_overlapping:
+            non_overlapping_segments.append(segment1)
+            # seen_segments.add(segment1)
+
+    # Convert non-overlapping segments back into a polyline
+    new_coords = []
+    for segment in non_overlapping_segments:
+        if not new_coords:
+            new_coords.extend(list(segment.coords))
+        else:
+            new_coords.extend(list(segment.coords)[1:])  # Avoid duplicating points
+
+    new_line = LineString(new_coords)
+    
+    return new_line

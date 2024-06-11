@@ -120,11 +120,16 @@ class VectorizedMap(object):
         map_ins_org_dict = {}
         
         map_ins_org_dict = make_dict(self.vec_classes)
+        
+        for vec_class in ['centerline', 'agent']:
+            if vec_class in map_geom_dic:
+                for v in map_geom_dic[vec_class].values():
+                    map_ins_org_dict[vec_class].append(v['geom'])
+        
         # transfer non LineString geom to an instance
         for vec_class in map_geom_dic.keys():
             if vec_class in ['centerline', 'agent']:
-                for v in map_geom_dic[vec_class].values():
-                    map_ins_org_dict[vec_class].append(v['geom'])
+                continue
             elif vec_class == 'boundary':
                 map_ins_org_dict[vec_class] = self._poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
             elif vec_class == 'divider':
@@ -154,10 +159,18 @@ class VectorizedMap(object):
                         break
 
                 if divider_check:
-                    new_dividers.append(line)
+                    check_intersection = 0
+                    for ped in map_ins_org_dict['ped_crossing']:
+                        if line.intersection(ped):
+                            check_intersection = 1
+                            new_dividers += keep_non_intersecting_parts(line, ped)
+                            break
+                    
+                    if not check_intersection:
+                        new_dividers.append(line)
 
             map_ins_org_dict['divider'] = new_dividers
-
+        
         return map_ins_org_dict
         
     def _get_centerline(self, lane_dict) -> dict:
@@ -255,9 +268,13 @@ class VectorizedMap(object):
                     ped.append(ped_dic['geom'])
 
         union_segments = ops.unary_union(ped)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x - 0.2, -max_y - 0.2, max_x + 0.2, max_y + 0.2)
+        
+        # max_x = self.patch_box[3] / 2
+        # max_y = self.patch_box[2] / 2
+        # local_patch = box(-max_x - 0.2, -max_y - 0.2, max_x + 0.2, max_y + 0.2)
+        max_xy = max(self.patch_box[2:]) / 2
+        local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
+        
         exteriors = []
         interiors = []
         if union_segments.geom_type == 'Polygon':
@@ -314,9 +331,13 @@ class VectorizedMap(object):
         polygons += boundary
 
         union_segments = ops.unary_union(polygons)
+        
         # max_x = self.patch_box[3] / 2
         # max_y = self.patch_box[2] / 2
         # local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
+        max_xy = max(self.patch_box[2:]) / 2
+        local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
+        
         exteriors = []
         interiors = []
         if union_segments.geom_type != 'MultiPolygon':
@@ -330,8 +351,8 @@ class VectorizedMap(object):
         for ext in exteriors:
             if ext.is_ccw:
                 ext.coords = list(ext.coords)[::-1]
-            # lines = ext.intersection(local_patch)
-            lines = LineString(ext)
+            lines = ext.intersection(local_patch)
+            # lines = LineString(ext)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
@@ -339,13 +360,26 @@ class VectorizedMap(object):
         for inter in interiors:
             if not inter.is_ccw:
                 inter.coords = list(inter.coords)[::-1]
-            # lines = inter.intersection(local_patch)
-            lines = LineString(inter)
+            lines = inter.intersection(local_patch)
+            # lines = LineString(inter)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
 
-        return one_type_line_geom_to_instances(results)
+        results = one_type_line_geom_to_instances(results)
+
+        # for ind, d in enumerate(results):
+        #     results[ind] = remove_polyline_overlap(results[ind])
+        
+        delete_boundary = []
+        for ind, line in enumerate(results):
+            for cl in polygon_geom['centerline'].values():
+                if line.intersection(cl['geom']) and line.length < 3.5:
+                    delete_boundary.append(ind)
+        
+        results = delete_elements_by_indices(results, delete_boundary)            
+        
+        return results
 
 
 def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch=False, map_path='', output_type='json', mme=False):
@@ -408,9 +442,9 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
 
         else:  # not map_v.int_num and not map_v.int_sav
             if vis_switch:
-                trans_np_dict_4_vis = np_to_geom(map_vect_pt_dic)
-                trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
-                visual.vis_contours(trans_np_dict_4_vis, ann_name)
+                # trans_np_dict_4_vis = np_to_geom(map_vect_pt_dic)
+                # trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
+                visual.vis_contours(map_vect_pt_dic, ann_name)
 
         ## Crop the ready-show vectorized numpy array by patch_box.
         map_geom_dict = {}
