@@ -44,6 +44,26 @@ mme.update_pt_version([pt_geom_1])
 mme.mod_nuscenes('v1.0-mini', vis=True) #When vis is true, PNG files are generated for visualization.
 ```
 
+#### DIY Mode
+MapModEX supports a DIY mode（manual mode）, which is controlled by the parameter 'diy'.
+```python
+## set perturbation versions
+pt_geom_1 = {'del_lan':[1, 0.3, None], 'diy':True} #randomly delet lanes
+```
+In DIY mode, you can select specific map layers to perturb, and you can also enter perturbance parameters.
+
+Solarized dark             |  Solarized Ocean
+:-------------------------:|:-------------------------:
+![](./documents/images/diy.gif)  |  ![](./documents/images/diy_result.gif)
+```setup
+Enter shift xoff: 3
+Enter shift yoff: 3
+Enter rotate angle: 90
+Enter scale xfact(can only be 1 or -1): 1
+Enter scale yfact(can only be 1 or -1): 1
+Enter your inclination amplitude: 1.5
+Enter gaussian standard: 0.07
+```
 ## Results
 
 Our model achieves the following performance:
