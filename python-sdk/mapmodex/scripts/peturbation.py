@@ -375,9 +375,6 @@ class MapTransform:
         
         if self.tran_args.diy:
             self.delet_centerlines = geometry_manager(self.geom_dict, 'centerline', ['lane', 'ped_crossing', 'boundary'])
-            
-            # for cl_dict in self.delet_centerlines:
-            #     delet_centerline = centerlines.pop(cl_dict['token'])
         else:
             if aff is not None:
                 times = math.ceil(len(centerlines.keys()) * aff['tran'][1])
@@ -387,8 +384,6 @@ class MapTransform:
                 return self.geom_dict
 
             self.delet_centerlines = random_select_element(centerlines, times)
-            # for key in self.delet_centerlines.keys():
-            #     delet_centerline = centerlines.pop(key)
 
         # check if there are map layers in use after removing centerlines
         # remove a centerline need also to remove its token from connected lanes and ped_crossings
@@ -618,8 +613,6 @@ class MapTransform:
         r_xy = np.random.normal(0, 1, [times, 2])
 
         for ind in index_list:
-            # rx = random.uniform(-1*args[2], args[2])
-            # ry = math.sqrt(1 - pow(rx,2))
             rx = r_xy[ind][0]
             ry = r_xy[ind][1]
             geom = affinity.translate(instance_list[layer_name][ind], rx, ry)
@@ -657,12 +650,6 @@ class MapTransform:
             select_peds = random_select_element(self.geom_dict['ped_crossing'], times)
             
         for ped_cro in select_peds:
-            # if ped_cro['geom'].geom_type == 'MultiPolygon':
-            #     ped_cro['geom'] = unary_union(ped_cro['geom'])
-            #     if ped_cro['geom'].geom_type == 'MultiPolygon':
-            #         print('ped_crossing is MultiPolygon and the shift is failed')
-            #         continue
-            
             if 'centerline_token' in ped_cro:
                 if len(ped_cro['centerline_token']):
                     along_cl_token = random.choice(ped_cro['centerline_token'])
@@ -714,17 +701,6 @@ class MapTransform:
                         ins = affinity.translate(ins, shi_p[0], shi_p[1])
 
                     ins_v['geom'] = ins
-                    # geom = valid_geom(
-                    #     ins, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-                    
-                    # if geom is None:
-                    #     del self.geom_dict[key][ind]
-                    #     # del correspondence_list[key][ind]
-                    # else:
-                    # if geom.geom_type == 'MultiLineString':
-                    #     ins_v['geom'] = ops.linemerge(geom)
-                    # else:
-                    #     ins_v['geom'] = geom
 
     def shift_map(self):
         xoff = random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1])

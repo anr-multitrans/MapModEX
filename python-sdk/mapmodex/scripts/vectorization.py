@@ -9,7 +9,6 @@ from shapely.geometry import MultiLineString, MultiPolygon, box, LineString
 
 from .peturbation import MapTransform
 
-# from utils.visualization import RenderMap
 from ..utils import *
 
 
@@ -59,9 +58,6 @@ class VectorizedMap(object):
         self.avm = avm
         self.ego_SE3_city = ego_SE3_city
         self.mme = mme
-
-        # delete_record = delet_record(
-        #     map_explorer, pertu_nusc_infos)
 
     def _init_pertu_nusc_infos(self, empty=True) -> None:
         if empty:
@@ -222,7 +218,6 @@ class VectorizedMap(object):
         if 'divider' in geom_dict.keys():
             for k, divider_dic in geom_dict['divider'].items():
                 if divider_dic['from'] == 'road_divider':
-                    # line_geom_list.update(divider_dic)
                     line_geom_list[k] = divider_dic
             
         if 'lane' in geom_dict.keys():
@@ -256,7 +251,6 @@ class VectorizedMap(object):
         
         ped = []
         for ped_dic in ped_crossings.values():
-            # if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
             if ped_dic['from'] == 'new':
                 for bon in map_ins_dict['boundary']:
                     if  bon.intersection(ped_dic['geom']):
@@ -267,23 +261,11 @@ class VectorizedMap(object):
                         break
                     else:
                         continue
-                        # if_inter_divider = False
-                        # for div in map_ins_dict['divider']:
-                        #     if div.intersection(ped_dic['geom']):
-                        #         if_inter_divider = True
-                        #         break
-                        # if not if_inter_divider:
-                        #     ped.append(ped_dic['geom'])
-                        #     break
             else:
                 ped.append(ped_dic['geom'])
         
-        # ped = [p['geom'] for p in ped_crossings.values()]
         union_segments = ops.unary_union(ped)
         
-        # max_x = self.patch_box[3] / 2
-        # max_y = self.patch_box[2] / 2
-        # local_patch = box(-max_x - 0.2, -max_y - 0.2, max_x + 0.2, max_y + 0.2)
         max_xy = max(self.patch_box[2:]) / 2
         local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
         
@@ -344,9 +326,6 @@ class VectorizedMap(object):
 
         union_segments = ops.unary_union(polygons)
         
-        # max_x = self.patch_box[3] / 2
-        # max_y = self.patch_box[2] / 2
-        # local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
         max_xy = max(self.patch_box[2:]) / 2
         local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
         
@@ -364,7 +343,6 @@ class VectorizedMap(object):
             if ext.is_ccw:
                 ext.coords = list(ext.coords)[::-1]
             lines = ext.intersection(local_patch)
-            # lines = LineString(ext)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
@@ -373,15 +351,11 @@ class VectorizedMap(object):
             if not inter.is_ccw:
                 inter.coords = list(inter.coords)[::-1]
             lines = inter.intersection(local_patch)
-            # lines = LineString(inter)
             if isinstance(lines, MultiLineString):
                 lines = ops.linemerge(lines)
             results.append(lines)
 
         results = one_type_line_geom_to_instances(results)
-
-        # for ind, d in enumerate(results):
-        #     results[ind] = remove_polyline_overlap(results[ind])
         
         delete_boundary = []
         for ind, line in enumerate(results):
@@ -454,8 +428,6 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
 
         else:  # not map_v.int_num and not map_v.int_sav
             if vis_switch:
-                # trans_np_dict_4_vis = np_to_geom(map_vect_pt_dic)
-                # trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
                 visual.vis_contours(map_vect_pt_dic, ann_name)
 
         ## Crop the ready-show vectorized numpy array by patch_box.

@@ -35,8 +35,7 @@ class GetMapLayerGeom(object):
         self.avm = avm
         self.ego_SE3_city = ego_SE3_city
 
-        # self.delete_record = delet_record(
-        #     self.map_explorer, self.pertu_nusc_infos)
+        # self.delete_record = delet_record(self.map_explorer, self.pertu_nusc_infos)
 
     def generate_nearby_centerlines(self, ls_dict):
         from av2.map.map_primitives import Polyline
@@ -427,9 +426,6 @@ class GetMapLayerGeom(object):
                         lane_dic['from'] == ['lane_connector_i']
                         
         return map_geom_org_dic
-        
-        
-# main function
 class get_vec_map():
     """transfer original data from map database to vector map, perturbation is optional."""
     def __init__(self, info, nusc_maps, map_explorer, out_path, e2g_translation=None, e2g_rotation=None, pc_range=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
@@ -514,7 +510,6 @@ class get_vec_map():
                 map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['lane', 'lane_connector'])
             elif vec_class == 'divider':  # road_divider, lane_divider
                 map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['road_divider', 'lane_divider']) #, 'lane_divider'])
-                # map_geom_org_dic['lane'] = self.get_geom._get_lane_divider(map_geom_org_dic['lane'])
             elif vec_class == 'ped_crossing':  # oed_crossing
                 map_geom_org_dic[vec_class] = self.get_geom.get_map_geom(['ped_crossing'])
             elif vec_class == 'centerline':  # lane, connector

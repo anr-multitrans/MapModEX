@@ -85,7 +85,7 @@ def _get_available_scenes(nusc):
             lidar_path, boxes, _ = nusc.get_sample_data(sd_rec['token'])
             lidar_path = str(lidar_path)
             if os.getcwd() in lidar_path:
-                # path from lyftdataset is absolute path
+                # path from lyftdataset is the absolute path
                 lidar_path = lidar_path.split(f'{os.getcwd()}/')[-1]
                 # relative path
             if not mmcv.is_filepath(lidar_path):

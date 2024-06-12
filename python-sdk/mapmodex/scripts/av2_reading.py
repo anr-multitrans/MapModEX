@@ -2,14 +2,11 @@
 ###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
 
 import multiprocessing
-import os
-import shutil
 import time
 import mmcv
 import logging
 from pathlib import Path
 from os import path as osp
-import argparse
 from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
 from shapely import ops
 from shapely.geometry import Polygon, LineString, box, MultiPolygon, MultiLineString
@@ -82,14 +79,6 @@ def create_av2_infos(root_path,
     sdb_logger = logging.getLogger('av2.utils.synchronization_database')
     prev_level = sdb_logger.level
     sdb_logger.setLevel(logging.CRITICAL)
-
-    # # FIXME: need to check the order
-    # pool = Pool(num_multithread)
-    # fn = partial(get_data_from_logid, loader=loader, data_root=root_path, pc_range=pc_range)
-    # rt = pool.map_async(fn, log_ids)
-    # pool.close()
-    # pool.join()
-    # results = rt.get()
 
     results = []
     for log_id in mmcv.track_iter_progress(log_ids):
@@ -171,7 +160,6 @@ def _get_data_from_logid(log_id,
     ns = NuScenes(version='v1.0-mini',
                   dataroot='/home/li/Documents/map/data/sets/nuscenes', verbose=True)
     ns_map = NuScenesMap("/home/li/Documents/map/data/sets/nuscenes")
-    # ns_map = NuScenesMap4MME("/home/li/Documents/map/data/sets/nuscenes")
     ns_map_exp = NuScenesMapExplorer(ns_map)
 
     for ts in cam_timestamps:
@@ -377,52 +365,3 @@ def extract_local_boundary(avm, ego_SE3_city, patch_box, patch_angle, patch_size
             else:
                 raise NotImplementedError
     return boundary_lines
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Data converter arg parser')
-    parser.add_argument(
-        '--data-root',
-        type=str,
-        default="/home/li/Documents/map/data/sets/av2/",
-        help='specify the root path of dataset')
-    parser.add_argument(
-        '--out-dir',
-        type=str,
-        default='/home/li/Documents/map/MapTRV2Local/tools/maptrv2/map_perturbation/output',
-        required=False,
-        help='name of info pkl')
-    parser.add_argument(
-        '--pc-range',
-        type=float,
-        nargs='+',
-        default=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
-        help='specify the perception point cloud range')
-    parser.add_argument(
-        '--nproc',
-        type=int,
-        default=64,
-        required=False,
-        help='workers to process data')
-    args = parser.parse_args()
-    return args
-
-
-vis_path = '/home/li/Documents/map/MapTRV2Local/tools/maptrv2/map_perturbation/visual/av2'
-
-if __name__ == '__main__':
-    args = parse_args()
-
-    # Empty the visualisation folder
-    empty = False
-    if empty:
-        shutil.rmtree(vis_path)
-        os.mkdir(vis_path)
-
-    for name in ['test']:  # ['train', 'val', 'test']:
-        create_av2_infos_mp(
-            root_path=args.data_root,
-            split=name,
-            info_prefix='av2',
-            dest_path=args.out_dir,
-            pc_range=args.pc_range,)
