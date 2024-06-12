@@ -1,4 +1,6 @@
-# MapModEX: A modding library to generate new maps from existing ones
+<!-- <div align="center"> -->
+<h1><img src="./documents/images/logo.png"></h1>
+<h3>A modding library to generate new maps from existing ones</h3>
 
 This repository is the official implementation of [MapModEX: A modding library to generate new maps from existing ones](). 
 
@@ -17,11 +19,17 @@ HDMaps play a central role in modern autonomous driving frameworks, being at the
 
 
 ## Requirements
-The running environment requirements of MapModEX depend on the database. If you use nuScenes, you need to install the [nuScenes devkit](https://github.com/nutonomy/nuscenes-devkit/blob/master/docs/installation.md):
+#### environment
+The running environment requirements of MapModEX depend on the database, but the [nuScenes devkit](https://github.com/nutonomy/nuscenes-devkit/blob/master/docs/installation.md) is required. You can install it by:
 ```setup
 pip install nuscenes-devkit
 ```
-If you use Argovers 2, you need to install [av2 devkit](https://argoverse.github.io/user-guide/getting_started.html#setup).
+If you use Argovers 2, you also need to install [av2 devkit](https://argoverse.github.io/user-guide/getting_started.html#setup).
+
+#### dataset
+You can download different versions of different databases as needed and you only need to download the raw data and the map data.
+
+we provide a simplified version of nuScenes [v1.0-mini](https://github.com/anr-multitrans/MapModEX/tree/local_li/python-sdk/data/nuscenes) data compressed package. This data package is also required. It is used to load the NuScenesMap used by MapModEX.
 
 <!-- (To be continued)Use the package manager [pip](https://pip.pypa.io/en/stable/) to install MapModEX.
 ```bash
@@ -40,10 +48,30 @@ mme = MapModEX(./data)
 pt_geom_1 = {'del_lan':[1, 0.3, None]} #randomly delet lanes
 mme.update_pt_version([pt_geom_1])
 
-## lunch MapModEx
-mme.mod_nuscenes('v1.0-mini', vis=True) #When vis is true, PNG files are generated for visualization.
+## launch MapModEx
+mme.mod_nuscenes('v1.0-mini', output_type='json', vis=True) #When vis is true, PNG files are generated for visualization.
 ```
 
+#### DIY Mode
+MapModEX supports a DIY mode（manual mode）, which is controlled by the parameter 'diy'.
+```python
+## set perturbation versions
+pt_geom_1 = {'del_lan':[1, 0.3, None], 'diy':True} #randomly delet lanes
+```
+In DIY mode, you can select specific map layers to perturb, and you can also enter perturbance parameters.
+
+Layer Selection Window             |  Step by step results
+:-------------------------:|:-------------------------:
+![](./documents/images/diy.gif)  |  ![](./documents/images/diy_result.gif)
+```setup
+Enter shift xoff: 3
+Enter shift yoff: 3
+Enter rotate angle: 90
+Enter scale xfact(can only be 1 or -1): 1
+Enter scale yfact(can only be 1 or -1): 1
+Enter inclination amplitude: 1.5
+Enter gaussian standard: 0.07
+```
 ## Results
 
 Our model achieves the following performance:

@@ -1,8 +1,5 @@
-"""
-reference to MapTRv2: https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
-lisence to MIT
-"""
-
+###     Based on data processing code from the official MapTRv2 code available under MIT License
+###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
 
 import copy
 import numpy as np
@@ -12,12 +9,11 @@ from shapely.geometry import MultiLineString, MultiPolygon, box, LineString
 
 from .peturbation import MapTransform
 
-# from utils.visualization import RenderMap
 from ..utils import *
 
 
 class VectorizedMap(object):
-    """transform geometry map layers to vectory"""
+    """transform geometry map layers to vector"""
     def __init__(self,
                  nusc_map,
                  map_explorer,
@@ -32,7 +28,7 @@ class VectorizedMap(object):
                  contour_classes=['road_segment'],
                  centerline_classes=['lane_connector', 'lane'],
                  mme=False):
-        """initialization
+        """ initialization
 
         Args:
             nusc_map (NuScenesMap): Dataset class in the nuScenes map dataset. 
@@ -40,7 +36,7 @@ class VectorizedMap(object):
             patch_box (tuple, optional): patch box[x,y,hight,width]. Defaults to (0,0,60,30).
             patch_angle (int, optional): patch angle. Defaults to 0.
             avm (ArgoverseStaticMap, optional): Dataset class in the Argoverse 2 dataset. Defaults to None.
-            ego_SE3_city (optional): Used for the conversion between AV2's current seat position and the global position. Defaults to None.
+            ego_SE3_city (optional): Used for converting AV2's current seat position and the global position. Defaults to None.
             map_classes (list, optional): Unified map layer types for perturbations. Defaults to ['boundary', 'divider', 'ped_crossing', 'centerline', 'lane', 'agent'].
             ped_crossing_classes (list, optional): map layer types belonging to the crosswalk. Defaults to ['ped_crossing'].
             contour_classes (list, optional): map layer types that belong to boundaries. Defaults to ['road_segment'].
@@ -62,9 +58,6 @@ class VectorizedMap(object):
         self.avm = avm
         self.ego_SE3_city = ego_SE3_city
         self.mme = mme
-
-        # delete_record = delet_record(
-        #     map_explorer, pertu_nusc_infos)
 
     def _init_pertu_nusc_infos(self, empty=True) -> None:
         if empty:
@@ -109,29 +102,34 @@ class VectorizedMap(object):
             self.delete = True
 
     def gen_vectorized_samples(self, map_geom_dic):
-        """transfor map layers to instance that can be visulized
+        """transfer map layers to the instance: For example, merging overlapping roadblocks and lanes into boundary lines
 
         Args:
-            map_geom_dic (dict): geomatry map layer
+            map_geom_dic (dict): geometry map layer
 
         Raises:
-            ValueError: if there is wrong layer type
+            ValueError: if there is a wrong layer type
 
         Returns:
-            dict: geomatry map instance
+            dict: geometry map instance
         """
         map_ins_org_dict = {}
         
         map_ins_org_dict = make_dict(self.vec_classes)
-        # transfer non linestring geom to instance
-        for vec_class in map_geom_dic.keys():
-            if vec_class in ['centerline', 'agent']:
+        
+        for vec_class in ['centerline', 'agent']:
+            if vec_class in map_geom_dic:
                 for v in map_geom_dic[vec_class].values():
                     map_ins_org_dict[vec_class].append(v['geom'])
+        
+        # transfer non LineString geom to an instance
+        for vec_class in map_geom_dic.keys():
+            if vec_class in ['centerline', 'agent']:
+                continue
             elif vec_class == 'boundary':
                 map_ins_org_dict[vec_class] = self._poly_geoms_to_instances(map_geom_dic) # merge boundary and lanes
             elif vec_class == 'divider':
-                # take from 'divier' and 'lane', merge overlaped and delete duplicated
+                # take from 'divider' and 'lane', merge overlapped and delete duplicated
                 map_ins_org_dict[vec_class] = self._line_geoms_to_instances(map_geom_dic) 
             elif vec_class == 'ped_crossing':
                 continue
@@ -143,24 +141,32 @@ class VectorizedMap(object):
             else:
                 raise ValueError(f'WRONG vec_class: {vec_class}')
 
-        # merge overlaped or connected ped_crossing to one
+        # merge overlapped or connected ped_crossing to one
         if 'ped_crossing' in map_geom_dic:
-            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic['ped_crossing'], map_ins_org_dict)
+            map_ins_org_dict['ped_crossing'] = self.ped_poly_geoms_to_instances(map_geom_dic, map_ins_org_dict)
 
         if 'divider' in map_ins_org_dict.keys():
             new_dividers = []
             for line in map_ins_org_dict['divider']:
                 divider_check = 1
                 for boundary in map_ins_org_dict['boundary']:
-                    if line.intersection(boundary):
+                    if line.buffer(0.3).intersection(boundary):
                         divider_check = 0
                         break
 
                 if divider_check:
-                    new_dividers.append(line)
+                    check_intersection = 0
+                    for ped in map_ins_org_dict['ped_crossing']:
+                        if line.intersection(ped):
+                            check_intersection = 1
+                            new_dividers += keep_non_intersecting_parts(line, ped)
+                            break
+                    
+                    if not check_intersection:
+                        new_dividers.append(line)
 
             map_ins_org_dict['divider'] = new_dividers
-
+        
         return map_ins_org_dict
         
     def _get_centerline(self, lane_dict) -> dict:
@@ -198,8 +204,7 @@ class VectorizedMap(object):
             centerline_dict['token'] = token_generator()
             centerline_dict['geom'] = line
 
-            centerline_dict, geoms_dict = get_centerline_info(
-                line, centerline_dict, geoms_dict)
+            centerline_dict, geoms_dict = get_centerline_info(centerline_dict, geoms_dict)
 
             centerline_dics[centerline_dict['token']] = centerline_dict
 
@@ -213,7 +218,6 @@ class VectorizedMap(object):
         if 'divider' in geom_dict.keys():
             for k, divider_dic in geom_dict['divider'].items():
                 if divider_dic['from'] == 'road_divider':
-                    # line_geom_list.update(divider_dic)
                     line_geom_list[k] = divider_dic
             
         if 'lane' in geom_dict.keys():
@@ -238,37 +242,42 @@ class VectorizedMap(object):
 
         return line_instances
 
-    def ped_poly_geoms_to_instances(self, ped_geom, map_ins_dict=[]):
+    def ped_poly_geoms_to_instances(self, map_geom_dict, map_ins_dict):
+        ped_crossings = map_geom_dict['ped_crossing']
+        road_segments = map_geom_dict['boundary']
+        lanes = map_geom_dict['lane']
+        
+        ped_crossings = check_isolated_new(ped_crossings, [road_segments, lanes], True)
+        
         ped = []
-
-        for ped_dic in ped_geom.values():
-            if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
-                if ped_dic['from'] == 'new':
-                    for bon in map_ins_dict['boundary']:
-                        if bon.intersection(ped_dic['geom']):
-                            if_inter_divider = False
-                            for div in map_ins_dict['divider']:
-                                if div.intersection(ped_dic['geom']):
-                                    if_inter_divider = True
-                                    break
-                            if not if_inter_divider:
-                                ped.append(ped_dic['geom'])
-                                break
-                else:
-                    ped.append(ped_dic['geom'])
-
+        for ped_dic in ped_crossings.values():
+            if ped_dic['from'] == 'new':
+                for bon in map_ins_dict['boundary']:
+                    if  bon.intersection(ped_dic['geom']):
+                        ped.append(ped_dic['geom'])
+                        break
+                    elif bon.intersection(ped_dic['geom'].buffer(0.1)):
+                        ped.append(ped_dic['geom'].buffer(0.1))
+                        break
+                    else:
+                        continue
+            else:
+                ped.append(ped_dic['geom'])
+        
         union_segments = ops.unary_union(ped)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x - 0.2, -max_y - 0.2, max_x + 0.2, max_y + 0.2)
+        
+        max_xy = max(self.patch_box[2:]) / 2
+        local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
+        
         exteriors = []
         interiors = []
         if union_segments.geom_type == 'Polygon':
             union_segments = MultiPolygon([union_segments])
         for poly in union_segments.geoms:
-            exteriors.append(poly.exterior)
-            for inter in poly.interiors:
-                interiors.append(inter)
+            if poly.geom_type == 'Polygon':
+                exteriors.append(poly.exterior)
+                for inter in poly.interiors:
+                    interiors.append(inter)
 
         results = []
         for ext in exteriors:
@@ -290,22 +299,37 @@ class VectorizedMap(object):
         return one_type_line_geom_to_instances(results)
 
     def _poly_geoms_to_instances(self, polygon_geom, mme=False):
+        boundary = []
+        lane_connector = []
         polygons = []
         
         if not self.mme:
             if 'boundary' in polygon_geom.keys():
                 for road_dic in polygon_geom['boundary'].values():
-                    polygons.append(road_dic['geom'])
+                    boundary.append(road_dic['geom'].buffer(0.1))
 
         if 'lane' in polygon_geom.keys():
             for lane_dic in polygon_geom['lane'].values():
                 if lane_dic['from'] != 'lane_connector':
                     polygons.append(lane_dic['geom'])
+                else:
+                    lane_connector.append(lane_dic['geom'])
+                    
+        if len(boundary) and len(lane_connector):
+            union_boundary = ops.unary_union(boundary)
+            for lane_con in lane_connector:
+                if lane_con.intersection(union_boundary):
+                    continue
+                else:
+                    polygons.append(lane_con)
+                    
+        polygons += boundary
 
         union_segments = ops.unary_union(polygons)
-        max_x = self.patch_box[3] / 2
-        max_y = self.patch_box[2] / 2
-        local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
+        
+        max_xy = max(self.patch_box[2:]) / 2
+        local_patch = box(-max_xy, -max_xy, max_xy, max_xy)
+        
         exteriors = []
         interiors = []
         if union_segments.geom_type != 'MultiPolygon':
@@ -332,18 +356,28 @@ class VectorizedMap(object):
                 lines = ops.linemerge(lines)
             results.append(lines)
 
-        return one_type_line_geom_to_instances(results)
+        results = one_type_line_geom_to_instances(results)
+        
+        delete_boundary = []
+        for ind, line in enumerate(results):
+            for cl in polygon_geom['centerline'].values():
+                if line.intersection(cl['geom']) and line.length < 3.5:
+                    delete_boundary.append(ind)
+        
+        results = delete_elements_by_indices(results, delete_boundary)            
+        
+        return results
 
 
 def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch=False, map_path='', output_type='json', mme=False):
-    """tranform orgnaized map layers to vetory, perturbat if necessary.
+    """transform organized map layers to vector, perturbat if necessary.
 
     Args:
         nusc_maps (NuScenesMap): Dataset class in the nuScenes map dataset.
         map_explorer (NuScenesMapExporer): Dataset class in the nuScenes map dataset explorer.
         pertube_vers (list): perturbed versions, each version should be a dict with parameter_names and parameter_values.
         info (dcit): information from the original map 
-        vis_switch (bool): visulization switch
+        vis_switch (bool): visualization switch
         visual (RenderMap): class in map visualization
         map_path (str): output path for saving map data
         output_type (str, optional): output type. 'pkl' is the data used for model training, and 'json' is the map data. Defaults to 'json'.
@@ -363,19 +397,20 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
         map_trans.tran_args = map_v
         map_trans.ann_name = ann_name
         
-        ## geom level pertubation
+        ## geom level perturbation
         map_trans.perturb_geom_layer(copy.deepcopy(info['map_geom_org_dic']))
         
         ## crop the ready-show vectorized geom by patch_box.
         trans_dic = {}
         map_ins_dict = {}
-        for vec_class, pt_vect_dic in map_trans.geom_dict.items():
+        geom_dic_copy = copy.deepcopy(map_trans.geom_dict)
+        for vec_class, pt_vect_dic in geom_dic_copy.items():
             map_ins_dict[vec_class] = get_geom_in_patch(map_explorer, pt_vect_dic, vector_map.patch_box)
         trans_dic['map_ins_dic_patch'] = map_ins_dict
         
         ## vectetry level pertubation
         map_trans.perturb_vect_map()
-        map_vect_pt_dic = map_trans.vect_dict
+        map_vect_pt_dic = copy.deepcopy(map_trans.vect_dict)
             
         if (map_v.int_num and map_v.int_ord == 'after') or (not map_v.int_num and map_v.int_sav):
             map_vect_pt_dic = np_to_geom(map_vect_pt_dic)
@@ -394,11 +429,9 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
 
         else:  # not map_v.int_num and not map_v.int_sav
             if vis_switch:
-                trans_np_dict_4_vis = np_to_geom(map_vect_pt_dic)
-                trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
-                visual.vis_contours(trans_np_dict_4_vis, ann_name)
+                visual.vis_contours(map_vect_pt_dic, ann_name)
 
-        ## crop the ready-show vectorized numpy array by patch_box.
+        ## Crop the ready-show vectorized numpy array by patch_box.
         map_geom_dict = {}
         for vec_class, pt_geom_dic in map_vect_pt_dic.items():
             map_geom_dict[vec_class] = get_vect_in_patch(pt_geom_dic, vector_map.patch_box)
@@ -416,7 +449,7 @@ def get_vect_map(nusc_maps, map_explorer, pertube_vers, info, visual, vis_switch
 
             info[map_json_name] = vector_to_map_json(trans_dic, info, map_json_name, map_path) #TODO use pt-vect
 
-        info[ann_name] = map_vect_pt_dic
+        info[ann_name] = map_geom_dict
     
     return info
 

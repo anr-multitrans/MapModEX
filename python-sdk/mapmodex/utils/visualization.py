@@ -1,23 +1,11 @@
-import math
 import os
-import pickle
-from typing import List, Optional, Tuple
-import descartes
-import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib.axes import Axes
-from matplotlib.figure import Figure
-from matplotlib.patches import Arrow, Rectangle
-from nuscenes.map_expansion.bitmap import BitMap
-from matplotlib.widgets import Button, TextBox
 import tkinter as tk
 from tkinter import messagebox
 from shapely.geometry import Point, LineString, Polygon, MultiLineString, MultiPolygon, box
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from shapely.errors import TopologicalError
 from shapely.validation import make_valid
-
 
 from .utilities import *
 # Recommended style to use as the plots will show grids.
@@ -194,7 +182,6 @@ def geometry_manager(geometries_dict, interactive_layer, static_layers): #TODO a
     root.mainloop()
     
     return deleted_geometries
-
 class RenderMap:
 
     def __init__(self,
@@ -227,235 +214,6 @@ class RenderMap:
         self.canvas_min_y = 0
         self.patch_box = [0,0,60,30]
 
-    def _vis_patch(self, patch_box):
-        if self.switch:
-            patch_coords = patch_box_2_coords(patch_box)
-            fig, ax = self.map_api.render_map_patch(
-                patch_coords, ['road_segment', 'lane'], figsize=(10, 10))
-
-            if self.save is not None:
-                check_path(self.save)
-                map_path = os.path.join(self.save, 'org.png')
-                plt.savefig(map_path, bbox_inches='tight',
-                            format='png', dpi=1200)
-
-                plt.close()
-
-                fig, ax = self.map_api.render_map_patch(
-                    patch_coords, ['road_segment'], figsize=(10, 10))
-                map_path = os.path.join(self.save, 'road_segment.png')
-                plt.savefig(map_path, bbox_inches='tight',
-                            format='png', dpi=1200)
-                plt.close()
-
-                fig, ax = self.map_api.render_map_patch(
-                    patch_coords, ['lane'], figsize=(10, 10))
-                map_path = os.path.join(self.save, 'lane.png')
-                plt.savefig(map_path, bbox_inches='tight',
-                            format='png', dpi=1200)
-
-            if self.show:
-                plt.show()
-
-            plt.close()
-
-    def _render_layer(self, map_anns, ax: Axes, layer_name: str, alpha: float, tokens: List[str] = None) -> None:
-        """
-        Wrapper method that renders individual layers on an axis.
-        :param ax: The matplotlib axes where the layer will get rendered.
-        :param layer_name: Name of the layer that we are interested in.
-        :param alpha: The opacity of the layer to be rendered.
-        :param tokens: Optional list of tokens to render. None means all tokens are rendered.
-        """
-        if layer_name in self.map_api.non_geometric_polygon_layers:
-            self._render_polygon_layer(map_anns, ax, layer_name, alpha, tokens)
-        elif layer_name in self.map_api.non_geometric_line_layers:
-            self._render_line_layer(map_anns, ax, layer_name, alpha, tokens)
-        else:
-            raise ValueError("{} is not a valid layer".format(layer_name))
-
-    def _render_polygon_layer(self, map_anns, ax: Axes, layer_name: str, alpha: float, tokens: List[str] = None) -> None:
-        """
-        Renders an individual non-geometric polygon layer on an axis.
-        :param ax: The matplotlib axes where the layer will get rendered.
-        :param layer_name: Name of the layer that we are interested in.
-        :param alpha: The opacity of the layer to be rendered.
-        :param tokens: Optional list of tokens to render. None means all tokens are rendered.
-        """
-        if layer_name not in self.map_api.lookup_polygon_layers:
-            raise ValueError('{} is not a polygonal layer'.format(layer_name))
-
-        first_time = True
-        records = getattr(self.map_api, layer_name)
-        if tokens is not None:
-            records = [r for r in records if r['token'] in tokens]
-        if layer_name == 'drivable_area':
-            for record in records:
-                polygons = [self.map_api.extract_polygon(
-                    polygon_token) for polygon_token in record['polygon_tokens']]
-
-                for polygon in polygons:
-                    if first_time:
-                        label = layer_name
-                        first_time = False
-                    else:
-                        label = None
-                    ax.add_patch(descartes.PolygonPatch(polygon, fc=self.color_map[layer_name], alpha=alpha,
-                                                        label=label))
-        else:
-            for polygon in map_anns:
-
-                if first_time:
-                    label = layer_name
-                    first_time = False
-                else:
-                    label = None
-
-                ax.add_patch(descartes.PolygonPatch(polygon, fc=self.color_map[layer_name], alpha=alpha,
-                                                    label=label))
-
-    def _render_line_layer(self, map_anns, ax: Axes, layer_name: str, alpha: float, tokens: List[str] = None) -> None:
-        """
-        Renders an individual non-geometric line layer on an axis.
-        :param ax: The matplotlib axes where the layer will get rendered.
-        :param layer_name: Name of the layer that we are interested in.
-        :param alpha: The opacity of the layer to be rendered.
-        :param tokens: Optional list of tokens to render. None means all tokens are rendered.
-        """
-        if layer_name not in self.map_api.non_geometric_line_layers:
-            raise ValueError("{} is not a line layer".format(layer_name))
-
-        first_time = True
-        if tokens is not None:
-            records = [r for r in records if r['token'] in tokens]
-        for line in map_anns:
-            if first_time:
-                label = layer_name
-                first_time = False
-            else:
-                label = None
-            if line.is_empty:  # Skip lines without nodes
-                continue
-            xs, ys = line.xy
-
-            if layer_name == 'traffic_light':
-                # Draws an arrow with the physical traffic light as the starting point, pointing to the direction on
-                # where the traffic light points.
-                ax.add_patch(Arrow(xs[0], ys[0], xs[1]-xs[0], ys[1]-ys[0], color=self.color_map[layer_name],
-                                   label=label))
-            else:
-                ax.plot(
-                    xs, ys, color=self.color_map[layer_name], alpha=alpha, label=label)
-
-    def _get_map_mask(self,
-                     geom,
-                     patch_box: Optional[Tuple[float, float, float, float]],
-                     patch_angle: float,
-                     layer_names: List[str] = None,
-                     canvas_size: Tuple[int, int] = (100, 100)) -> np.ndarray:
-        """
-        Return list of map mask layers of the specified patch.
-        :param patch_box: Patch box defined as [x_center, y_center, height, width]. If None, this plots the entire map.
-        :param patch_angle: Patch orientation in degrees. North-facing corresponds to 0.
-        :param layer_names: A list of layer names to be extracted, or None for all non-geometric layers.
-        :param canvas_size: Size of the output mask (h, w). If None, we use the default resolution of 10px/m.
-        :return: Stacked numpy array of size [c x h x w] with c channels and the same width/height as the canvas.
-        """
-        # For some combination of parameters, we need to know the size of the current map.
-        if self.map_api.map_name == 'singapore-onenorth':
-            map_dims = [1585.6, 2025.0]
-        elif self.map_api.map_name == 'singapore-hollandvillage':
-            map_dims = [2808.3, 2922.9]
-        elif self.map_api.map_name == 'singapore-queenstown':
-            map_dims = [3228.6, 3687.1]
-        elif self.map_api.map_name == 'boston-seaport':
-            map_dims = [2979.5, 2118.1]
-        else:
-            raise Exception('Error: Invalid map!')
-
-        # If None, return the entire map.
-        if patch_box is None:
-            patch_box = [map_dims[0] / 2, map_dims[1] /
-                         2, map_dims[1], map_dims[0]]
-
-        # If None, return all geometric layers.
-        if layer_names is None:
-            layer_names = self.map_api.non_geometric_layers
-
-        # If None, return the specified patch in the original scale of 10px/m.
-        if canvas_size is None:
-            map_scale = 10
-            canvas_size = np.array((patch_box[2], patch_box[3])) * map_scale
-            canvas_size = tuple(np.round(canvas_size).astype(np.int32))
-
-        # Get geometry of each layer.
-        map_geom = [kv for kv in geom.items()]
-
-        # Convert geometry of each layer into mask and stack them into a numpy tensor.
-        # Convert the patch box from global coordinates to local coordinates by setting the center to (0, 0).
-        local_box = (0.0, 0.0, patch_box[2], patch_box[3])
-        map_mask = self.map_exploer.map_geom_to_mask(
-            map_geom, local_box, canvas_size)
-        assert np.all(map_mask.shape[1:] == canvas_size)
-
-        return map_mask
-
-    def _render_map_mask(self,
-                        geom,
-                        patch_box: Tuple[float, float, float, float],
-                        patch_angle=0,  # float,
-                        layer_names=None,  # List[str],
-                        canvas_size=(1000, 1000),  # Tuple[int, int],
-                        figsize=(12, 12),  # Tuple[int, int],
-                        n_row: int = 3,
-                        version=None) -> Tuple[Figure, List[Axes]]:
-        """
-        Render map mask of the patch specified by patch_box and patch_angle.
-        :param patch_box: Patch box defined as [x_center, y_center, height, width].
-        :param patch_angle: Patch orientation in degrees.
-        :param layer_names: A list of layer names to be extracted.
-        :param canvas_size: Size of the output mask (h, w).
-        :param figsize: Size of the figure.
-        :param n_row: Number of rows with plots.
-        :return: The matplotlib figure and a list of axes of the rendered layers.
-        """
-        if self.switch:
-            if layer_names is None:
-                layer_names = self.map_api.non_geometric_layers
-
-            map_mask = self.get_map_mask(
-                geom, patch_box, patch_angle, layer_names, canvas_size)
-
-            # If no canvas_size is specified, retrieve the default from the output of get_map_mask.
-            if canvas_size is None:
-                canvas_size = map_mask.shape[1:]
-
-            fig = plt.figure(figsize=figsize)
-            ax = fig.add_axes([0, 0, 1, 1])
-            ax.set_xlim(0, canvas_size[1])
-            ax.set_ylim(0, canvas_size[0])
-
-            n_col = math.ceil(len(map_mask) / n_row)
-            gs = gridspec.GridSpec(n_row, n_col)
-            gs.update(wspace=0.025, hspace=0.05)
-            for i in range(len(map_mask)):
-                r = i // n_col
-                c = i - r * n_col
-                subax = plt.subplot(gs[r, c])
-                subax.imshow(map_mask[i], origin='lower')
-                subax.text(canvas_size[0] * 0.5,
-                           canvas_size[1] * 1.1, layer_names[i])
-                subax.grid(False)
-
-            if self.save is not None:
-                check_path(self.save)
-                plt.savefig(os.path.join(self.save, version))
-
-            if self.show:
-                plt.show()
-
-            plt.close()
-
     def vis_contours(self, contours, map_version):
         if self.switch:
 
@@ -467,12 +225,13 @@ class RenderMap:
             for pred_label_3d in contours.keys():
                 if pred_label_3d in self.info['order'] and len(contours[pred_label_3d]):
                     for pred_pts_3d in contours[pred_label_3d]:
-                        pts_x = pred_pts_3d[:, 0]
-                        pts_y = pred_pts_3d[:, 1]
-                        plt.plot(
-                            pts_x, pts_y, color=colors_plt[pred_label_3d], linewidth=1, alpha=0.8, zorder=-1)
-                        plt.scatter(
-                            pts_x, pts_y, color=colors_plt[pred_label_3d], s=1, alpha=0.8, zorder=-1)
+                        if pred_pts_3d.size:
+                            pts_x = pred_pts_3d[:, 0]
+                            pts_y = pred_pts_3d[:, 1]
+                            plt.plot(
+                                pts_x, pts_y, color=colors_plt[pred_label_3d], linewidth=1, alpha=0.8, zorder=-1)
+                            plt.scatter(
+                                pts_x, pts_y, color=colors_plt[pred_label_3d], s=1, alpha=0.8, zorder=-1)
 
             if self.save is not None:
                 check_path(self.save)
@@ -484,10 +243,6 @@ class RenderMap:
                 plt.show()
 
             plt.close()
-
-    def vis_polygones(self):
-        pass
-
 
 def vis_contours_local(contours, show_layers = None, patch_box=[0, 0, 62, 32], save_path=None, show=False):
     plt.figure(figsize=(2, 4))
@@ -539,13 +294,48 @@ def show_geom(new_shape):
         os.exit("wrong geom type: ", new_shape.geom_type)
         
     plt.show()
-    
-    
-if __name__ == '__main__':
-    map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion/pt_patch.pkl'
-    save_map_path = 'MapTRV2Local/tools/maptrv2/map_perturbation/pt_map/cc8c0bf57f984915a77078b10eb33198/4f545737bf3347fbbc9af60b0be9a963/perturbated_map_json_0/maps/expansion'
 
-    with open(map_path, 'rb') as f:
-        ret_di = pickle.load(f)
+# Function to add polygons to the plot
+def add_geometry(ax, geom, **kwargs):
+    if geom.is_empty:
+        return
+    if geom.geom_type == 'Polygon':
+        x, y = geom.exterior.xy
+        ax.fill(x, y, **kwargs)
+    elif geom.geom_type == 'MultiPolygon':
+        for poly in geom:
+            x, y = poly.exterior.xy
+            ax.fill(x, y, **kwargs)
+    elif geom.geom_type == 'LineString':
+        x, y = geom.xy
+        ax.plot(x, y, **kwargs)
+    elif geom.geom_type == 'MultiLineString':
+        for line in geom:
+            x, y = line.xy
+            ax.plot(x, y, **kwargs)
+    else:
+        print(f"Warning: Unsupported geometry type {geom.geom_type}")
 
-    vis_contours_local(ret_di, save_path=save_map_path)
+def show_geoms(geometries):
+
+    # Create a figure and axis for plotting
+    fig, ax = plt.subplots(figsize=(8, 6))
+
+    if isinstance(geometries, dict):
+        geometries = [element['geom'] for element in geometries.values()]
+    
+    # Plot each geometry in the list
+    for geom in geometries:
+        if isinstance(geom, (Polygon, MultiPolygon, LineString, MultiLineString)):
+            add_geometry(ax, geom, alpha=0.5)
+        else:
+            print(f"Warning: Unsupported geometry {type(geom)}")
+    
+    # Adding titles and labels
+    ax.set_title('Polygons and MultiPolygons on One Canvas')
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.grid(True)
+
+    # Show plot
+    plt.show()

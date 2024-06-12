@@ -8,9 +8,8 @@ import secrets
 import shutil
 import sys
 import warnings
-from matplotlib import pyplot as plt
 import numpy as np
-from shapely.geometry import Polygon, MultiPolygon, LineString, Point
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 from shapely import ops, affinity
 import networkx as nx
 from nuscenes.map_expansion.map_api import NuScenesMap
@@ -226,31 +225,16 @@ def vector_to_map_json(info_dic, info, map_version, save=None, fake=True):
 
     return r_gen.pertu_nusc_infos
 
-def creat_ped_polygon(map_explorer, road_segment_token=None): #FIXME
-    min_x, min_y, max_x, max_y = map_explorer.map_api.get_bounds('road_segment', road_segment_token)
-
-    x_range = max_x - min_x
-    y_range = max_y - min_y
-
-    if max([x_range, y_range]) <= 4:
-        new_polygon = map_explorer.map_api.extract_polygon(map_explorer.map_api.get('road_segment', road_segment_token)['polygon_token'])
-    else:
-        if x_range > y_range:
-            rand = random.uniform(min_x, max_x - 4)
-            left_bottom = Point([rand, min_y])
-            left_top = Point([rand, max_y])
-            right_bottom = Point([rand + 4, min_y])
-            right_top = Point([rand + 4, max_y])
-        else:
-            rand = random.uniform(min_y, max_y - 4)
-            left_bottom = Point([min_x, rand])
-            left_top = Point([min_x, rand + 4])
-            right_bottom = Point([max_x, rand])
-            right_top = Point([max_x, rand + 4])
-
-        new_polygon = Polygon([left_top, left_bottom, right_bottom, right_top])
-
-    return new_polygon
+def delete_elements_by_indices(data_list, indices):
+    # Ensure indices are sorted in descending order to avoid shifting issues
+    indices_sorted = sorted(indices, reverse=True)
+    
+    # Delete elements at the specified indices
+    for index in indices_sorted:
+        if 0 <= index < len(data_list):
+            del data_list[index]
+    
+    return data_list
 
 
 class delet_record:
@@ -422,11 +406,11 @@ def union_line(line_geoms):
 
 
 def keep_non_intersecting_parts(geom_keep, geom_intersect, edge_include=False):
-    # Check if line intersects with polygon
+    # Check if the line intersects with the polygon
     if not geom_keep.intersects(geom_intersect):
         return [geom_keep]
 
-    # If intersection occurs, find the difference
+    # If an intersection occurs, find the difference
     intersecting_part = geom_keep.intersection(geom_intersect)
     difference = geom_keep.difference(intersecting_part)
 
@@ -470,8 +454,19 @@ def get_geom_in_patch(map_explorer, geoms, patch_box=[0, 0, 60, 30], patch_angle
             except:
                 geom['geom'] = make_valid(geom['geom']).intersection(patch)
     elif isinstance(geoms, list):
-        for ind in range(len(geoms)):
-            geoms[ind] = geoms[ind].intersection(patch)
+        new_list = []
+        for geom in geoms:
+            new_geom = geom.intersection(patch)
+            if new_geom:
+                if new_geom.geom_type in ['MultiPolygon', 'MultiLineString']:
+                    new_list += [gm for gm in new_geom.geoms]
+                elif new_geom.geom_type in ['Polygon', 'LineString']:
+                    new_list.append(new_geom)
+                else:
+                    continue
+        geoms = new_list
+        # for ind in range(len(geoms)):
+        #     geoms[ind] = geoms[ind].intersection(patch)
     else:
         sys.exit('wrong data type')
 
@@ -490,24 +485,25 @@ def get_index(ins_c, threshold=[None, None]):
     if threshold[0]:
         indices = np.where(ins_c > threshold[0])
         try:
-            indices_list.append(list(zip(indices[0], indices[1]))) # Convert the result to a list of index tuples
+            indices_list += list(indices[0]) # Convert the result to a list of index tuples
         except:
             pass
             
     if threshold[1]:
         indices = np.where(ins_c < threshold[1])
         try:
-            indices_list.append(list(zip(indices[0], indices[1])))
+            indices_list += list(indices[0]) # Convert the result to a list of index tuples
         except:
             pass
+    indices_list = list(set(indices_list))
     
     return indices_list
 
 def get_vect_in_patch(vect_list, patch_box=[0, 0, 60, 30]):
-    x_min = patch_box[0] - patch_box[3] / 2
-    x_max = patch_box[0] + patch_box[3] / 2
-    y_min = patch_box[1] - patch_box[2] / 2
-    y_max = patch_box[1] + patch_box[2] / 2
+    x_min = patch_box[1] - patch_box[3] / 2
+    x_max = patch_box[1] + patch_box[3] / 2
+    y_min = patch_box[0] - patch_box[2] / 2
+    y_max = patch_box[0] + patch_box[2] / 2
     xy_range = [[x_min, x_max], [y_min, y_max]]
 
     new_vect_list = []
@@ -519,8 +515,8 @@ def get_vect_in_patch(vect_list, patch_box=[0, 0, 60, 30]):
         
         # for indice in indices_list:
         #     np.delete(vect, indice)        
-        
-        new_vect_list.append(threshold_ins(vect, xy_range))
+        if vect.size:
+            new_vect_list.append(threshold_ins(vect, xy_range))
     
     return new_vect_list
 
@@ -553,56 +549,84 @@ def update_lane(lane_and_connectors, incoming_left, outgoing_left, new_lane_and_
 
     return new_lane_and_connectors, new_lanes
 
+def get_intersection(geom, it_geom, type='multi', keep_it_only=False):
+    new_ccgd = []
+    for ccgd_g in geom.geoms:
+        for c_g in it_geom:
+            if ccgd_g.intersection(c_g):
+                if keep_it_only:
+                    new_ccgd.append(ccgd_g.intersection(c_g))
+                else:
+                    new_ccgd.append(ccgd_g)
+                    
+    return new_ccgd
 
-def check_isolated(layer_dic, check_layers=[], keep_interected=False):
-    if bool(layer_dic):
-        delet_layer_token = []
-        for k, lane_divider in layer_dic.items():
-            if keep_interected:
-                interected_list = []
-            check_divider = 0
-            for check_layer in check_layers:
-                for check_layer_dic in check_layer.values():
-                    new_divider = lane_divider['geom'].intersection(
-                        check_layer_dic['geom'])
-                    if new_divider:
-                        check_divider = 1
-
-                        if keep_interected:
-                            interected_list.append(new_divider)
-                            # lane_divider['geom'] = new_divider
-                        else:
-                            break
-
-                if check_divider:
-                    if keep_interected:
-                        lane_divider['geom'] = ops.unary_union(interected_list)
-                    else:
+def check_isolated_new(check_geom_dict, intersect_geom_dict_list=[], keep_intersect_only=False):
+    if bool(check_geom_dict):
+        
+        copied_cgd = copy.deepcopy(check_geom_dict)
+        
+        # conbine checker
+        checker_geom = []
+        for check_layer in intersect_geom_dict_list:
+            if len(check_layer):
+                checker_geom.append(unary_union([check_copied_cgd['geom'] for check_copied_cgd in check_layer.values()]))
+        
+        # if not len(checker_geom):
+        #     return {}
+            
+        # checker_geom = unary_union(checker_geom)
+        
+        for ccgd in copied_cgd.values():
+            if ccgd['geom'].geom_type == 'MultiLineString':
+                new_ccgd = get_intersection(ccgd['geom'], checker_geom, keep_it_only=keep_intersect_only)
+                if len(new_ccgd) > 1:
+                   check_geom_dict[ccgd['token']]['geom'] = unary_union(new_ccgd)
+                elif len(new_ccgd) == 1:
+                   check_geom_dict[ccgd['token']]['geom'] = new_ccgd[0]
+                else:
+                   check_geom_dict.pop(ccgd['token'])                  
+            
+            elif ccgd['geom'].geom_type == 'MultiPolygon':
+                new_ccgd = get_intersection(ccgd['geom'], checker_geom, keep_it_only=keep_intersect_only)
+                if len(new_ccgd) > 1:
+                   check_geom_dict[ccgd['token']]['geom'] = unary_union(new_ccgd)
+                elif len(new_ccgd) == 1:
+                   check_geom_dict[ccgd['token']]['geom'] = new_ccgd[0]
+                else:
+                   check_geom_dict.pop(ccgd['token'])                  
+            
+            elif ccgd['geom'].geom_type in ['Polygon', 'LineString']:
+                check_it = 0
+                for c_g in checker_geom:
+                    if ccgd['geom'].intersection(c_g):
+                        check_it = 1
+                        if keep_intersect_only:
+                            check_geom_dict[ccgd['token']]['geom'] = ccgd['geom'].intersection(c_g)
                         break
+                
+                if not check_it:    
+                    check_geom_dict.pop(ccgd['token'])                  
 
-            if not check_divider:
-                delet_layer_token.append(k)
+    return check_geom_dict
 
-        for token in delet_layer_token:
-            layer_dic.pop(token)
-
-    return layer_dic
-
-
-def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
+def get_interect_info(line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
     if line_new_key is None:
         line_new_key = layer_name+'_token'
+    else:
+        line_new_key = line_new_key + '_' + layer_name + '_token'
 
-    line_dict[line_new_key] = []
-    for key, layer_dic in geoms_dict[layer_name].items():
-        if layer_dic['geom'].intersects(line):
-            line_dict[line_new_key].append(key)
+    if line_new_key not in line_dict:
+        line_dict[line_new_key] = []
+    
+    for layer_dic in geoms_dict[layer_name].values():
+        if line_dict['geom'].intersects(layer_dic['geom']):
+            line_dict[line_new_key].append(layer_dic['token'])
             if geom_new_key not in layer_dic:
-                layer_dic['centerline_token'] = []
-            layer_dic['centerline_token'].append(line_dict['token'])
+                layer_dic[geom_new_key] = []
+            layer_dic[geom_new_key].append(line_dict['token'])
 
     return line_dict, geoms_dict
-
 
 def get_path(ls_dict):
     pts_G = nx.DiGraph()
@@ -715,12 +739,10 @@ def valid_geom(geom, map_explorer, patch_box, patch_angle):
     return new_geom
 
 
-def get_centerline_info(line, centerline_dict, geoms_dict):
+def get_centerline_info(centerline_dict, geoms_dict):
 
-    centerline_dict, geoms_dict = get_interect_info(
-        line, centerline_dict, geoms_dict, 'lane', 'centerline_token')
-    centerline_dict, geoms_dict = get_interect_info(
-        line, centerline_dict, geoms_dict, 'ped_crossing', 'centerline_token')
+    centerline_dict, geoms_dict = get_interect_info(centerline_dict, geoms_dict, 'lane', 'centerline_token')
+    centerline_dict, geoms_dict = get_interect_info(centerline_dict, geoms_dict, 'ped_crossing', 'centerline_token')
 
     return centerline_dict, geoms_dict
 
@@ -751,32 +773,32 @@ def move_polygon_away(polygon_to_move, other_polygons, direction, step_size=0.1)
 
 
 def fix_corner(vect, patch_box):
-    x_min = patch_box[0] - patch_box[3] / 2
-    x_max = patch_box[0] + patch_box[3] / 2
-    y_min = patch_box[1] - patch_box[2] / 2
-    y_max = patch_box[1] + patch_box[2] / 2
+    x_min = patch_box[1] - patch_box[3] / 2
+    x_max = patch_box[1] + patch_box[3] / 2
+    y_min = patch_box[0] - patch_box[2] / 2
+    y_max = patch_box[0] + patch_box[2] / 2
     xy_range = [[x_min, x_max], [y_min, y_max]]
 
     return threshold_ins(vect, xy_range)
 
 def threshold_ins(vect, xy_range):
-    y = vect.shape[1]
-    for dem in range(vect.shape[1]):
+    indices_list = []
+    for dem in range(2):
         ins_c = vect[:, dem]
-        indices_list = get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
+        indices_list += get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
     
+    indices_list = list(set(indices_list))
+    indices_list = sorted(indices_list, reverse=True)
     for indice in indices_list:
-        np.delete(vect, indice)
+        vect = np.delete(vect, indice, 0)
         
     return vect        
 
 def get_agent_info(geoms_dict):
     for layer_dic in geoms_dict['agent'].values():
-        layer_dic, geoms_dict = get_interect_info(
-            layer_dic['geom'], layer_dic, geoms_dict, 'lane', 'agent_token')
+        layer_dic, geoms_dict = get_interect_info(layer_dic, geoms_dict, 'lane', 'agent_token')
 
-        layer_dic, geoms_dict = get_interect_info(
-            layer_dic['ego'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
+        layer_dic, geoms_dict = get_interect_info(layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco')
 
     return geoms_dict
 
@@ -847,7 +869,7 @@ def geom_to_np(map_ins_dict, inter = False, inter_args=0, int_back=False, info=N
                     else:
                         inter_acc = inter_args
                     
-                    # managing the multi-geometries
+                    # Managing the multi-geometries
                     if instance.geom_type in ['MultiPolygon', 'MultiLineString']:
                         instance = multi_2_single(instance)
                         
@@ -900,26 +922,26 @@ def move_polygons(line, polygons_dic, distance, except_token = []):
         if key in except_token:
             continue
         
-        # 创建多边形对象
+        # Creating a polygon object
         poly = polygon['geom']
 
-        # 计算多边形和线段的交点
+        # Calculate the intersection of a polygon and a line segment
         intersection = poly.intersection(line)
-        # 计算线段的单位向量
+        # Calculate the unit vector of a line segment
         dx = line.coords[1][0] - line.coords[0][0]
         dy = line.coords[1][1] - line.coords[0][1]
         length = (dx ** 2 + dy ** 2) ** 0.5
         ux = dx / length
         uy = dy / length
 
-        # 计算向外移动的距离
+        # Calculate the distance moved outward
         move_x = -uy * distance
         move_y = ux * distance
-        # 如果多边形与线段相交
+        # If the polygon intersects the line segment
         if intersection:
             if poly.geom_type == 'LineString':
                 continue
-            # 将多边形顶点向外移动
+            # Move polygon vertices outward
             if poly.geom_type == 'MultiPolygon':
                 new_poly = []
                 for py in poly.geoms:
@@ -930,7 +952,7 @@ def move_polygons(line, polygons_dic, distance, except_token = []):
                 new_coords = [(x + move_x, y + move_y) for x, y in poly.exterior.coords]
                 new_poly = Polygon(new_coords)
         else:
-            # 如果没有交点，直接向外移动
+            # If there is no intersection, move directly outward
             new_poly = affinity.translate(poly, xoff=move_x, yoff=move_y)
             
         polygon['geom'] = new_poly
@@ -972,7 +994,7 @@ class NuScenesMap4MME(NuScenesMap):
     def _make_shortcuts(self) -> None:
         """ Makes the record shortcuts. """
 
-        # Makes a shortcut between non geometric records to their nodes.
+        # Makes a shortcut between nongeometric records and their nodes.
         for layer_name in self.non_geometric_polygon_layers:
             if layer_name == 'drivable_area':  # Drivable area has more than one geometric representation.
                 pass
@@ -986,7 +1008,7 @@ class NuScenesMap4MME(NuScenesMap):
             for record in self.__dict__[layer_name]:
                 record['node_tokens'] = self.get('line', record['line_token'])['node_tokens']
 
-        # Makes a shortcut between stop lines to their cues, there's different cues for different types of stop line.
+        # Makes a shortcut between stop lines to their cues; there are different cues for different types of stop lines.
         # Refer to `_get_stop_line_cue()` for details.
         for record in self.stop_line:
             cue = self._get_stop_line_cue(record)

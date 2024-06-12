@@ -1,28 +1,15 @@
-"""
-reference to MapTRv2: https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
-lisence to MIT
-"""
-
+###     Based on data processing code from the official MapTRv2 code available under MIT License
+###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
 
 import multiprocessing
-import os
-import shutil
 import time
 import mmcv
 import logging
 from pathlib import Path
 from os import path as osp
-import argparse
-from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
-from shapely import ops
-from shapely.geometry import Polygon, LineString, box, MultiPolygon, MultiLineString
-from shapely.strtree import STRtree
-import numpy as np
-from shapely.geometry import CAP_STYLE, JOIN_STYLE
-from scipy.spatial import distance
 from .map_reading import get_vec_map
 import warnings
-from nuscenes.nuscenes import NuScenes
+from nuscenes.map_expansion.map_api import NuScenesMap, NuScenesMapExplorer
 
 from ..utils import *
 
@@ -44,11 +31,10 @@ FAIL_LOGS = [
     '453e5558-6363-38e3-bf9b-42b5ba0a6f1d'
 ]
 
-
 def create_av2_infos(root_path,
                     pertube_vers,
+                    dest_path,
                     info_prefix='av2',
-                    dest_path=None,
                     split='train',
                     num_multithread=64,
                     output_type='json',
@@ -65,12 +51,10 @@ def create_av2_infos(root_path,
         split (str): Split of the data.
             Default: 'train'
     """
-    root_path = osp.join(root_path, split)
-    if dest_path is None:
-        dest_path = root_path
-
+    root_path_v = osp.join(root_path, split)
+    
     from av2.datasets.sensor.av2_sensor_dataloader import AV2SensorDataLoader
-    loader = AV2SensorDataLoader(Path(root_path), Path(root_path))
+    loader = AV2SensorDataLoader(Path(root_path_v), Path(root_path_v))
     log_ids = list(loader.get_log_ids())
     for l in FAIL_LOGS:
         if l in log_ids:
@@ -86,18 +70,14 @@ def create_av2_infos(root_path,
     prev_level = sdb_logger.level
     sdb_logger.setLevel(logging.CRITICAL)
 
-    # # FIXME: need to check the order
-    # pool = Pool(num_multithread)
-    # fn = partial(get_data_from_logid, loader=loader, data_root=root_path, pc_range=pc_range)
-    # rt = pool.map_async(fn, log_ids)
-    # pool.close()
-    # pool.join()
-    # results = rt.get()
-
+    global ns_map, ns_map_exp
+    ns_map = NuScenesMap(os.path.join(os.path.dirname(root_path), 'nuscenes'))
+    ns_map_exp = NuScenesMapExplorer(ns_map)
+    
     results = []
     for log_id in mmcv.track_iter_progress(log_ids):
         result = _get_data_from_logid(
-            log_id, loader=loader, data_root=root_path, pertube_vers=pertube_vers, pc_range=pc_range, output_type=output_type,vis=vis)
+            log_id, dest_path, loader=loader, data_root=root_path_v, pertube_vers=pertube_vers, pc_range=pc_range, output_type=output_type,vis=vis)
         results.append(result)
 
     if output_type == 'pkl':
@@ -122,32 +102,8 @@ def create_av2_infos(root_path,
         print(f'saving results to {info_path}')
         mmcv.dump(infos, info_path)
 
-
-def get_divider(avm):
-    from av2.map.lane_segment import LaneMarkType
-    divider_list = []
-    for ls in avm.get_scenario_lane_segments():
-        for bound_type, bound_city in zip([ls.left_mark_type, ls.right_mark_type], [ls.left_lane_boundary, ls.right_lane_boundary]):
-            if bound_type not in [LaneMarkType.NONE,]:
-                divider_list.append(bound_city.xyz)
-    return divider_list
-
-
-def get_boundary(avm):
-    boundary_list = []
-    for da in avm.get_scenario_vector_drivable_areas():
-        boundary_list.append(da.xyz)
-    return boundary_list
-
-
-def get_ped(avm):
-    ped_list = []
-    for pc in avm.get_scenario_ped_crossings():
-        ped_list.append(pc.polygon)
-    return ped_list
-
-
 def _get_data_from_logid(log_id,
+                         dest_path,
                         loader,
                         data_root,
                         pertube_vers,
@@ -171,13 +127,7 @@ def _get_data_from_logid(log_id,
     # The frequency is 10Hz
     cam_timestamps = loader._sdb.per_log_lidar_timestamps_index[log_id]
 
-    ns = NuScenes(version='v1.0-mini',
-                  dataroot='/home/li/Documents/map/data/sets/nuscenes', verbose=True)
-    ns_map = NuScenesMap("/home/li/Documents/map/data/sets/nuscenes")
-    # ns_map = NuScenesMap4MME("/home/li/Documents/map/data/sets/nuscenes")
-    ns_map_exp = NuScenesMapExplorer(ns_map)
-
-    for ts in cam_timestamps:
+    for ts in mmcv.track_iter_progress(cam_timestamps):
         cam_ring_fpath = [loader.get_closest_img_fpath(
             log_id, cam_name, ts
         ) for cam_name in CAM_NAMES]
@@ -216,216 +166,9 @@ def _get_data_from_logid(log_id,
 
         info["scene_token"] = str(ts)
         info['dataset'] = 'av2'
-        gma = get_vec_map(info, ns_map, ns_map_exp, e2g_translation,
-                          e2g_rotation, pc_range, avm, out_type=output_type, vis_path=vis_path, vis=vis)
+        gma = get_vec_map(info, ns_map, ns_map_exp, dest_path, e2g_translation, e2g_rotation, pc_range, out_type=output_type, avm=avm, vis=vis)
         info = gma.get_map_ann(pertube_vers)
 
         samples.append(info)
 
     return samples, discarded
-
-
-def merge_dividers(divider_list):
-    # divider_list: List[np.array(N,3)]
-    if len(divider_list) < 2:
-        return divider_list
-    divider_list_shapely = [LineString(divider) for divider in divider_list]
-    poly_dividers = [divider.buffer(1,
-                                    cap_style=CAP_STYLE.flat, join_style=JOIN_STYLE.mitre) for divider in divider_list_shapely]
-    tree = STRtree(poly_dividers)
-    index_by_id = dict((id(pt), i) for i, pt in enumerate(poly_dividers))
-    final_pgeom = []
-    remain_idx = [i for i in range(len(poly_dividers))]
-    for i, pline in enumerate(poly_dividers):
-        if i not in remain_idx:
-            continue
-        remain_idx.pop(remain_idx.index(i))
-        final_pgeom.append(divider_list[i])
-        for o in tree.query(pline):
-            o_idx = index_by_id[id(o)]
-            if o_idx not in remain_idx:
-                continue
-            # remove highly overlap divider
-            inter = o.intersection(pline).area
-            o_iof = inter / o.area
-            p_iof = inter / pline.area
-            # if query divider is highly overlaped with latter dividers, just remove it
-            if p_iof >= 0.95:
-                final_pgeom.pop()
-                break
-            # if queried divider is highly overlapped with query divider,
-            # drop it and just turn to next one.
-            if o_iof >= 0.95:
-                remain_idx.pop(remain_idx.index(o_idx))
-                continue
-
-            pline_se_pts = final_pgeom[-1][[0, -1], :2]  # only on xy
-            o_se_pts = divider_list[o_idx][[0, -1], :2]  # only on xy
-            four_se_pts = np.concatenate([pline_se_pts, o_se_pts], axis=0)
-            dist_mat = distance.cdist(four_se_pts, four_se_pts, 'euclidean')
-            for j in range(4):
-                dist_mat[j, j] = 100
-            index = np.where(dist_mat == 0)[0].tolist()
-            if index == [0, 2]:
-                # e oline s s pline e
-                # +-------+ +-------+
-                final_pgeom[-1] = np.concatenate(
-                    [np.flip(divider_list[o_idx], axis=0)[:-1], final_pgeom[-1]])
-                remain_idx.pop(remain_idx.index(o_idx))
-            elif index == [1, 2]:
-                # s pline e s oline e
-                # +-------+ +-------+
-                final_pgeom[-1] = np.concatenate(
-                    [final_pgeom[-1][:-1], divider_list[o_idx]])
-                remain_idx.pop(remain_idx.index(o_idx))
-            elif index == [0, 3]:
-                # s oline e s pline e
-                # +-------+ +-------+
-                final_pgeom[-1] = np.concatenate(
-                    [divider_list[o_idx][:-1], final_pgeom[-1]])
-                remain_idx.pop(remain_idx.index(o_idx))
-            elif index == [1, 3]:
-                # s pline e e oline s
-                # +-------+ +-------+
-                final_pgeom[-1] = np.concatenate(
-                    [final_pgeom[-1][:-1], np.flip(divider_list[o_idx], axis=0)])
-                remain_idx.pop(remain_idx.index(o_idx))
-            elif len(index) > 2:
-                remain_idx.pop(remain_idx.index(o_idx))
-
-    return final_pgeom
-
-
-def extract_local_boundary(avm, ego_SE3_city, patch_box, patch_angle, patch_size, pt):
-    boundary_list = []
-    patch = NuScenesMapExplorer.get_patch_coord(patch_box, patch_angle)
-    for da in avm.get_scenario_vector_drivable_areas():
-        boundary_list.append(da.xyz)
-
-    polygon_list = []
-    for da in boundary_list:
-        exterior_coords = da
-        interiors = []
-        polygon = Polygon(exterior_coords, interiors)
-        if polygon.is_valid:
-            new_polygon = polygon.intersection(patch)
-            if not new_polygon.is_empty:
-                if new_polygon.geom_type == 'Polygon':
-                    if not new_polygon.is_valid:
-                        continue
-                    new_polygon = proc_polygon(new_polygon, ego_SE3_city)
-                    if not new_polygon.is_valid:
-                        continue
-                elif new_polygon.geom_type == 'MultiPolygon':
-                    polygons = []
-                    for single_polygon in new_polygon.geoms:
-                        if not single_polygon.is_valid or single_polygon.is_empty:
-                            continue
-                        new_single_polygon = proc_polygon(
-                            single_polygon, ego_SE3_city)
-                        if not new_single_polygon.is_valid:
-                            continue
-                        polygons.append(new_single_polygon)
-                    if len(polygons) == 0:
-                        continue
-                    new_polygon = MultiPolygon(polygons)
-                    if not new_polygon.is_valid:
-                        continue
-                else:
-                    raise ValueError(
-                        '{} is not valid'.format(new_polygon.geom_type))
-
-                if new_polygon.geom_type == 'Polygon':
-                    new_polygon = MultiPolygon([new_polygon])
-                polygon_list.append(new_polygon)
-
-    union_segments = ops.unary_union(polygon_list)
-    max_x = patch_size[1] / 2
-    max_y = patch_size[0] / 2
-    local_patch = box(-max_x + 0.2, -max_y + 0.2, max_x - 0.2, max_y - 0.2)
-    exteriors = []
-    interiors = []
-    if union_segments.geom_type != 'MultiPolygon':
-        union_segments = MultiPolygon([union_segments])
-    for poly in union_segments.geoms:
-        exteriors.append(poly.exterior)
-        for inter in poly.interiors:
-            interiors.append(inter)
-
-    results = []
-    for ext in exteriors:
-        if ext.is_ccw:
-            ext.coords = list(ext.coords)[::-1]
-        lines = ext.intersection(local_patch)
-        if isinstance(lines, MultiLineString):
-            lines = ops.linemerge(lines)
-        results.append(lines)
-
-    for inter in interiors:
-        if not inter.is_ccw:
-            inter.coords = list(inter.coords)[::-1]
-        lines = inter.intersection(local_patch)
-        if isinstance(lines, MultiLineString):
-            lines = ops.linemerge(lines)
-        results.append(lines)
-
-    boundary_lines = []
-    for line in results:
-        if not line.is_empty:
-            if line.geom_type == 'MultiLineString':
-                for single_line in line.geoms:
-                    boundary_lines.append(np.array(single_line.coords))
-            elif line.geom_type == 'LineString':
-                boundary_lines.append(np.array(line.coords))
-            else:
-                raise NotImplementedError
-    return boundary_lines
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Data converter arg parser')
-    parser.add_argument(
-        '--data-root',
-        type=str,
-        default="/home/li/Documents/map/data/sets/av2/",
-        help='specify the root path of dataset')
-    parser.add_argument(
-        '--out-dir',
-        type=str,
-        default='/home/li/Documents/map/MapTRV2Local/tools/maptrv2/map_perturbation/output',
-        required=False,
-        help='name of info pkl')
-    parser.add_argument(
-        '--pc-range',
-        type=float,
-        nargs='+',
-        default=[-30.0, -15.0, -5.0, 30.0, 15.0, 3.0],
-        help='specify the perception point cloud range')
-    parser.add_argument(
-        '--nproc',
-        type=int,
-        default=64,
-        required=False,
-        help='workers to process data')
-    args = parser.parse_args()
-    return args
-
-
-vis_path = '/home/li/Documents/map/MapTRV2Local/tools/maptrv2/map_perturbation/visual/av2'
-
-if __name__ == '__main__':
-    args = parse_args()
-
-    # Empty the visualisation folder
-    empty = False
-    if empty:
-        shutil.rmtree(vis_path)
-        os.mkdir(vis_path)
-
-    for name in ['test']:  # ['train', 'val', 'test']:
-        create_av2_infos_mp(
-            root_path=args.data_root,
-            split=name,
-            info_prefix='av2',
-            dest_path=args.out_dir,
-            pc_range=args.pc_range,)

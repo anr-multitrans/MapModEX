@@ -1,8 +1,5 @@
-"""
-reference to MapTRv2: https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
-lisence to MIT
-"""
-
+###     Based on data processing code from the official MapTRv2 code available under MIT License
+###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
 
 import os
 import mmcv
@@ -46,11 +43,11 @@ class MMENuScenesMapExplorer(NuScenesMapExplorer):
 
     def has_equal_list(self, team1, team2):
         """
-        Determine whether there is at least one list in each team that contains the same elements in any order.
+        Determine whether at least one list in each team contains the same elements in any order.
         
-        :param team1: A list of two lists, representing the first team.
-        :param team2: A list of two lists, representing the second team.
-        :return: True if there is at least one list in each team that contains the same elements, False otherwise.
+        :param team1: A list of two lists representing the first team.
+        :param team2: A list of two lists representing the second team.
+        :return: True if at least one list in each team contains the same elements, False otherwise.
         """
         # Iterate through each list in team1
         for list1 in team1:
@@ -72,7 +69,7 @@ def _get_available_scenes(nusc):
         nusc (class): Dataset class in the nuScenes dataset.
 
     Returns:
-        available_scenes (list[dict]): List of basic information for the
+        available_scenes (list[dict]): List of essential information for the
             available scenes.
     """
     available_scenes = []
@@ -88,7 +85,7 @@ def _get_available_scenes(nusc):
             lidar_path, boxes, _ = nusc.get_sample_data(sd_rec['token'])
             lidar_path = str(lidar_path)
             if os.getcwd() in lidar_path:
-                # path from lyftdataset is absolute path
+                # path from lyftdataset is the absolute path
                 lidar_path = lidar_path.split(f'{os.getcwd()}/')[-1]
                 # relative path
             if not mmcv.is_filepath(lidar_path):
@@ -178,7 +175,7 @@ def _obtain_vectormap(nusc, nusc_maps, map_explorer, info, point_cloud_range, pe
         vis (bool, optional): visulization. Defaults to False.
 
     Returns:
-        dict: infomation includ vectory map layers
+        dict: information include vector map layers
     """
     lidar2ego = np.eye(4)
     lidar2ego[:3, :3] = Quaternion(info['lidar2ego_rotation']).rotation_matrix
@@ -212,19 +209,17 @@ def _fill_trainval_infos(nusc,
                          max_sweeps=10,
                          point_cloud_range=[-15.0, -30.0, -10.0, 15.0, 30.0, 10.0],
                          vis=False):
-    """Generate the train/val infos from the raw data.
+    """ Generate the train/val infos from the raw data.
 
     Args:
         nusc (:obj:`NuScenes`): Dataset class in the nuScenes dataset.
         train_scenes (list[str]): Basic information of training scenes.
         val_scenes (list[str]): Basic information of validation scenes.
-        test (bool): Whether use the test mode. In the test mode, no
-            annotations can be accessed. Default: False.
+        test (bool): Whether to use the test mode. In the test mode, no annotations can be accessed. Default: False.
         max_sweeps (int): Max number of sweeps. Default: 10.
 
     Returns:
-        tuple[list[dict]]: Information of training set and validation set
-            that will be saved to the info file.
+        tuple[list[dict]]: Information of the training set and validation set that will be saved to the info file.
     """
     train_nusc_infos = []
     val_nusc_infos = []
