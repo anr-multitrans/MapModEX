@@ -408,17 +408,18 @@ class MapTransform:
         # check if there are agents in use or need an update after removing a lane
         # remove a lane need also to remove connected agent and agent trajectory
         # If an agent exits but is trajectory longer being used, update it
+        del_agents = []    
         for del_lane in delet_lanes:
             if 'agent_eco_token' in del_lane.keys():
                 for agent_token in del_lane['agent_eco_token']:
                     del_lane['agent_token'].remove(agent_token)
-                    agents.pop(agent_token)
+                    del_agents.append(agent_token)
+                    
             if 'agent_token' in del_lane.keys():    
                 for ag_tra_token in del_lane['agent_token']:
                     if ag_tra_token in agents.keys():
                         agents[ag_tra_token]['lane_tokens'] = []
         
-        del_agents = []    
         for ag_token, ag_val in agents.items():
             if not len(ag_val['lane_token']):
                 if len(ag_val['eco_lane_token']):
@@ -429,7 +430,15 @@ class MapTransform:
                     else:
                         del_agents.append(ag_token)
 
-        for ag_token in del_agents:
+        for ag_token in set(del_agents):
+            if 'lane_token' in agents[ag_token]:
+                for l_token in agents[ag_token]['lane_token']:
+                    if l_token in lanes:
+                        try:
+                            lanes[lane_token][agent_token].remove(ag_token)
+                        except:
+                            continue
+                        
             agents.pop(ag_token)
         
         # check if there are dividers in use

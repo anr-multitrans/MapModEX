@@ -274,9 +274,10 @@ class VectorizedMap(object):
         if union_segments.geom_type == 'Polygon':
             union_segments = MultiPolygon([union_segments])
         for poly in union_segments.geoms:
-            exteriors.append(poly.exterior)
-            for inter in poly.interiors:
-                interiors.append(inter)
+            if poly.geom_type == 'Polygon':
+                exteriors.append(poly.exterior)
+                for inter in poly.interiors:
+                    interiors.append(inter)
 
         results = []
         for ext in exteriors:
