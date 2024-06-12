@@ -203,3 +203,106 @@ def remove_polyline_overlap(line):
     new_line = LineString(new_coords)
     
     return new_line
+
+def zoom_grid(patch_box, param, zoom_are=None):
+    nx, ny = int(patch_box[3]+1)+2, int(patch_box[2]+1)+2
+    x = np.linspace(-int(patch_box[3]/2)-1, int(patch_box[3]/2)+1, nx)
+    y = np.linspace(-int(patch_box[2]/2)-1, int(patch_box[2]/2)+1, ny)
+    xv, yv = np.meshgrid(x, y, indexing='ij')
+
+    xv = xv.reshape(33, 63, 1)
+    yv = yv.reshape(33, 63, 1)
+    xyv = np.concatenate((xv, yv), axis=2)
+    xyv_max = np.reshape(np.max(abs(xyv), 2), (33, 63, 1))
+    xyv_max = np.concatenate((xyv_max, xyv_max), axis=2)
+    np.seterr(invalid='ignore')
+    xy_mv = np.multiply(np.divide(xyv, xyv_max), param)
+
+    if zoom_are is not None:
+        xmin = math.floor(zoom_are[0]) + 16
+        ymin = math.floor(zoom_are[1]) + 31
+        xmax = math.ceil(zoom_are[2]) + 16
+        ymax = math.ceil(zoom_are[3]) + 31
+
+        xyv[xmin:xmax+1, ymin:ymax+1, :] = xyv[xmin:xmax+1,ymin:ymax+1, :] + xy_mv[xmin:xmax+1, ymin:ymax+1, :]
+    else:
+        xyv += xy_mv
+
+    return xyv[:, :, 0], xyv[:, :, 1]
+
+def shift_layers(num_layer_elements, valid_geom, patch_box, instance_list, correspondence_list, layer_name, args):
+    """shift map layer
+
+    Args:
+        instance_list (_type_): _description_
+        correspondence_list (_type_): _description_
+        layer_name (_type_): _description_
+        args (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    times = math.floor(num_layer_elements[layer_name] * args[1])
+    index_list = random.choices([i for i in range(num_layer_elements[layer_name])], k=times)
+    r_xy = np.random.normal(0, 1, [times, 2])
+
+    for ind in index_list:
+        rx = r_xy[ind][0]
+        ry = r_xy[ind][1]
+        geom = affinity.translate(instance_list[layer_name][ind], rx, ry)
+
+        geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+
+        if geom is None:
+            rx *= -1
+            ry *= -1
+            geom = affinity.translate(
+                instance_list[layer_name][ind], rx, ry)
+            geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+
+            if geom is None:
+                del instance_list[layer_name][ind]
+                del correspondence_list[layer_name][ind]
+
+                continue
+
+        if geom.geom_type == 'MultiLineString':
+            instance_list[layer_name][ind] = linemerge(geom)
+        else:
+            instance_list[layer_name][ind] = geom
+
+    return instance_list, correspondence_list
+
+def zoom_layers(num_layer_elements, valid_geom, patch_box, instance_list, correspondence_list, layer_name, args):
+    times = math.floor(num_layer_elements[layer_name] * args[1])
+    index_list = random.choices([i for i in range(num_layer_elements[layer_name])], k=times)
+
+    new_ins_list = []
+    new_cor_list = []
+    for ind, ele in enumerate(instance_list[layer_name]):
+        if ind in index_list:
+            centroid = np.array(ele.centroid.coords)
+            mv = centroid / abs(np.max(centroid)) * args[2]
+            rx = mv[0][0]
+            ry = mv[0][1]
+            geom = affinity.translate(ele, rx, ry)
+
+            geom = valid_geom(geom, [0, 0, patch_box[2], patch_box[3]], 0)
+
+            if geom is None:
+                continue
+
+            if geom.geom_type == 'MultiLineString':
+                new_ins_list.append(linemerge(geom))
+                new_cor_list.append(correspondence_list[layer_name][ind])
+            else:
+                new_ins_list.append(geom)
+                new_cor_list.append(correspondence_list[layer_name][ind])
+        else:
+            new_ins_list.append(ele)
+            new_cor_list.append(correspondence_list[layer_name][ind])
+
+    instance_list[layer_name] = new_ins_list
+    correspondence_list[layer_name] = new_cor_list
+
+    return instance_list, correspondence_list

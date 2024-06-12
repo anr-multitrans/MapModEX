@@ -102,7 +102,7 @@ class VectorizedMap(object):
             self.delete = True
 
     def gen_vectorized_samples(self, map_geom_dic):
-        """transfer map layers to the instance that can be visualized
+        """transfer map layers to the instance: For example, merging overlapping roadblocks and lanes into boundary lines
 
         Args:
             map_geom_dic (dict): geometry map layer

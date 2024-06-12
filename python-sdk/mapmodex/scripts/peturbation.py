@@ -115,6 +115,14 @@ class MapTransform:
         self.num_layer_elements = count_layer_element(geom_dict)
 
     def _creat_ped_polygon(self, road_segment):
+        """Create a crosswalk in a roadblock
+
+        Args:
+            road_segment (Polygon): Geometry of roadblocks
+
+        Returns:
+            Polygon: The geometry of a crosswalk
+        """
         min_x, min_y, max_x, max_y = road_segment.bounds
 
         x_range = max_x - min_x
@@ -140,33 +148,17 @@ class MapTransform:
 
         return new_polygon
 
-    def _zoom_grid(self, param, zoom_are=None):
-        nx, ny = int(self.patch_box[3]+1)+2, int(self.patch_box[2]+1)+2
-        x = np.linspace(-int(self.patch_box[3]/2)-1, int(self.patch_box[3]/2)+1, nx)
-        y = np.linspace(-int(self.patch_box[2]/2)-1, int(self.patch_box[2]/2)+1, ny)
-        xv, yv = np.meshgrid(x, y, indexing='ij')
-
-        xv = xv.reshape(33, 63, 1)
-        yv = yv.reshape(33, 63, 1)
-        xyv = np.concatenate((xv, yv), axis=2)
-        xyv_max = np.reshape(np.max(abs(xyv), 2), (33, 63, 1))
-        xyv_max = np.concatenate((xyv_max, xyv_max), axis=2)
-        np.seterr(invalid='ignore')
-        xy_mv = np.multiply(np.divide(xyv, xyv_max), param)
-
-        if zoom_are is not None:
-            xmin = math.floor(zoom_are[0]) + 16
-            ymin = math.floor(zoom_are[1]) + 31
-            xmax = math.ceil(zoom_are[2]) + 16
-            ymax = math.ceil(zoom_are[3]) + 31
-
-            xyv[xmin:xmax+1, ymin:ymax+1, :] = xyv[xmin:xmax+1,ymin:ymax+1, :] + xy_mv[xmin:xmax+1, ymin:ymax+1, :]
-        else:
-            xyv += xy_mv
-
-        return xyv[:, :, 0], xyv[:, :, 1]
-
     def _warping(self, ins, xv, yv):
+        """mesh-based coordinate transformation
+
+        Args:
+            ins (np.array): coordinates
+            xv (_type_): The x coordinate of the mesh
+            yv (_type_): The y coordinate of the mesh
+
+        Returns:
+            np.array: new coordinate in the warped mesh
+        """
         new_point_list = []
         for point in ins:
             x = point[0]
@@ -179,7 +171,7 @@ class MapTransform:
             x_floor = math.floor(x)
             y_floor = math.floor(y)
 
-            # Check upper or lower triangle
+            # Check the upper or lower triangle
             x_res = x - x_floor
             y_res = y - y_floor
             upper = (x_res+y_res) <= 1.0
@@ -222,6 +214,19 @@ class MapTransform:
         return np.array(new_point_list)
 
     def _con(self, ins, xlim, ylim, randx, randy, randr):
+        """Trigonometric warping
+
+        Args:
+            ins (np.array): coordinates
+            xlim (list): x-coordinate bounds
+            ylim (list): y-coordinate bounds
+            randx (_type_): Vertical distortion amplitude
+            randy (_type_): Horizontal distortion amplitude
+            randr (_type_): Inclination amplitude
+
+        Returns:
+            np.array: warped coordinates
+        """
         new_point_list = []
         for point in ins:
 
@@ -238,10 +243,6 @@ class MapTransform:
             else:
                 if xlim[0] < j+offset_x < xlim[1]:
                     new_point.append(j+offset_x)
-                # elif xlim[1] < j+offset_x:
-                #     new_point.append(xlim[1])
-                # elif j+offset_x < xlim[0]:
-                #     new_point.append(xlim[0])
                 else:
                     continue
 
@@ -250,10 +251,6 @@ class MapTransform:
             else:
                 if ylim[0] < i+offset_y < ylim[1]:
                     new_point.append(i+offset_y)
-                # elif ylim[1] < i+offset_y:
-                #     new_point.append(ylim[1])
-                # elif i+offset_y < ylim[0]:
-                #     new_point.append(ylim[0])
                 else:
                     continue
 
@@ -262,6 +259,14 @@ class MapTransform:
         return np.array(new_point_list)
 
     def _gaussian_grid(self, def_args):
+        """Get Gaussian mesh
+
+        Args:
+            def_args (dict): Parameters of the Gaussian distortion: mean and standard
+
+        Returns:
+            tulpe: The x and y coordinates of the grid
+        """
         nx, ny = int(self.patch_box[3]+1)+2, int(self.patch_box[2]+1)+2
         x = np.linspace(-int(self.patch_box[3]/2)-1, int(self.patch_box[3]/2)+1, nx)
         y = np.linspace(-int(self.patch_box[2]/2)-1, int(self.patch_box[2]/2)+1, ny)
@@ -281,6 +286,7 @@ class MapTransform:
         """Add a path: a center line w/ lanes and crosswalks in series"""
         centerlines = self.geom_dict['centerline']
 
+        # Obtain the centerline that needs to be disturbed according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             add_centerlines = geometry_manager(self.geom_dict, 'centerline', ['lane', 'ped_crossing', 'boundary'])
         else:
@@ -303,7 +309,7 @@ class MapTransform:
             yfact = 1
             origin_sca = Point([0,0])
             
-            if self.tran_args.diy:
+            if self.tran_args.diy: # Manually set perturbation parameters
                 print('adding centerline parameters setting:')
                 xoff = float(input("Enter shift xoff: "))
                 yoff = float(input("Enter shift yoff: "))
@@ -317,7 +323,7 @@ class MapTransform:
                     angle = random.randint(-180, 180)
                     xfact = random.choice([-1, 1])
                     yfact = random.choice([-1, 1])
-                else:
+                else: # When add_centerline as an intermediate step of the affine_transform_centerline
                     if aff['name'] == 'shi_lan':
                         xoff = random.uniform(aff['tran'][2][0][0], aff['tran'][2][0][1])
                         yoff = random.uniform(aff['tran'][2][1][0], aff['tran'][2][1][1])
@@ -327,39 +333,42 @@ class MapTransform:
                         xfact = self.tran_args.sca_pat[2][0]
                         yfact = self.tran_args.sca_pat[2][1]
             
-                        
-            new_lane = centerline_dic['geom']
-            new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
-            new_cl_dic = layer_dict_generator(new_lane, source='new')
-            self.geom_dict['centerline'][new_cl_dic['token']] = new_cl_dic #new centerline
+            # Convert and add centerline            
+            new_cl = centerline_dic['geom']
+            new_cl = affine_transfer_4_add_centerline(new_cl, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
+            new_cl_dic = layer_dict_generator(new_cl, source='new')
+            self.geom_dict['centerline'][new_cl_dic['token']] = new_cl_dic
             
-            center_lane = new_lane.buffer(1.8)
+            # new lane from new centerline 
+            center_lane = new_cl.buffer(1.8)
             new_lane_dic = layer_dict_generator(center_lane, source='centerline')
-            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic #new lane from centerline
+            self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic
             
             self.geom_dict['lane'][new_lane_dic['token']]['centerline_token'] = [new_cl_dic['token']] #add centerline token to new lane
             self.geom_dict['centerline'][new_cl_dic['token']]['lane_token'] = [new_lane_dic['token']] #add lane token to centerline
             
+            # Convert and add lanes that connected with new centerline 
             if 'lane_token' in centerline_dic:
                 for lane_token in centerline_dic['lane_token']:
                     if lane_token in self.geom_dict['lane']:
                         lane_dic = self.geom_dict['lane'][lane_token]
                         if lane_dic['from'] != 'lane_connector':
-                            new_lane = lane_dic['geom']
-                            new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
-                            new_lane_dic = layer_dict_generator(new_lane, source='new')
+                            new_cl = lane_dic['geom']
+                            new_cl = affine_transfer_4_add_centerline(new_cl, xoff, yoff, angle, origin_rot, xfact, yfact, origin_sca)
+                            new_lane_dic = layer_dict_generator(new_cl, source='new')
                             self.geom_dict['lane'][new_lane_dic['token']] = new_lane_dic #new lane from lane
                             
                             self.geom_dict['lane'][new_lane_dic['token']]['centerline_token'] = [new_cl_dic['token']] #add centerline token to new lane
                             self.geom_dict['centerline'][new_cl_dic['token']]['lane_token'].append(new_lane_dic['token']) #add lane token to centerline
             
+            # Convert and add ped_crossing that connected with new centerline  #FIXME
             # self.geom_dict['centerline'][centerlien_dic['token']]['ped_crossing_token'] = []        
-            # if 'ped_crossing_token' in centerline_dic: #FIXME
+            # if 'ped_crossing_token' in centerline_dic:
             #     for lane_token in centerline_dic['ped_crossing_token']:
             #         lane_dic = self.geom_dict['ped_crossing'][lane_token]
-            #         new_lane = lane_dic['geom']
-            #         new_lane = affine_transfer_4_add_centerline(new_lane, xoff, yoff, angle, origin, xfact, yfact)
-            #         new_lane_dic = layer_dict_generator(new_lane, source='new')
+            #         new_cl = lane_dic['geom']
+            #         new_cl = affine_transfer_4_add_centerline(new_cl, xoff, yoff, angle, origin, xfact, yfact)
+            #         new_lane_dic = layer_dict_generator(new_cl, source='new')
             #         self.geom_dict['ped_crossing'][new_lane_dic['token']] = new_lane_dic
                     # self.geom_dict['ped_crossing'][new_lane_dic['token']]['centerline_token'] = [centerlien_dic['token']] #add centerline token to new ped_crossing
                     # self.geom_dict['centerline'][centerlien_dic['token']]['ped_crossing_token'].append(new_lane_dic['token']) #add lane token to centerline
@@ -373,6 +382,7 @@ class MapTransform:
         ped_crossings = self.geom_dict['ped_crossing']
         agents = self.geom_dict['agent']
         
+        # Obtain the centerline that needs to be disturbed according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             self.delet_centerlines = geometry_manager(self.geom_dict, 'centerline', ['lane', 'ped_crossing', 'boundary'])
         else:
@@ -483,6 +493,7 @@ class MapTransform:
         """Widen or narrow the boundaries of a path: the boundaries of all lanes and crosswalks connected by the center line"""
         move_distance = self.tran_args.wid_lan[2] / 2.0
         
+        # Obtain the lane(centerline) that needs to be disturbed according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             # select_centerlines = geometry_manager(self.geom_dict, 'centerline', ['lane', 'ped_crossing', 'boundary'])
             pass #TODO
@@ -501,13 +512,13 @@ class MapTransform:
             select_centerlines = random_select_element(centerline_dict, times)
             
         for cl_dic in select_centerlines:
+            # Get the centerline and its center as the starting point for the move
             centerline = cl_dic['geom']
             centerline_center = Point(centerline.centroid)
             
             for layer, polylines in self.geom_dict_croped.items():
                 moved_polylines = []
-                
-                if layer in ['ped_crossing', 'lane']:
+                if layer in ['ped_crossing', 'lane']: # Move disjointly ped_crossing and lane
                     for polyline in polylines:
                         if not centerline.intersection(polyline):
                             moved_polylines.append(move_geom(centerline_center, polyline, move_distance))
@@ -515,7 +526,7 @@ class MapTransform:
                             moved_polylines.append(polyline)
                     self.geom_dict_croped[layer] = moved_polylines
                     
-                elif layer == 'centerline':
+                elif layer == 'centerline': # Move non-own disjoint centerline
                     for cl_k, polyline in centerline_dict.items():
                         if cl_k == cl_dic['token']:
                             continue
@@ -525,7 +536,7 @@ class MapTransform:
                             else:
                                 polyline['geom'] = move_geom(centerline_center, polyline['geom'], move_distance)
                         
-                else:
+                else: # Move other map layers
                     for polyline in polylines:
                         moved_polylines.append(move_geom(centerline_center, polyline, move_distance))
                     self.geom_dict_croped[layer] = moved_polylines
@@ -536,6 +547,7 @@ class MapTransform:
         """Widen or narrow the boundaries"""
         move_distance = self.tran_args.wid_bou[2] / 2.0
         
+        # Obtain the boundary that needs to be disturbed according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             # select_boundaris = geometry_manager(self.geom_dict_croped, 'boundary', ['ped_crossing', 'divider'])
             pass #TODO
@@ -553,6 +565,7 @@ class MapTransform:
                 
             select_boundaries = random_select_element(boundary_dict, times)
         
+        # Move the boundary line around the map center [0,0]
         for bd_dic in select_boundaries:
             boundary = bd_dic['geom']
             center = Point([0,0])
@@ -564,6 +577,7 @@ class MapTransform:
     def add_ped_crossing(self):
         """Add a ped_crossing"""
 
+        # Select the road block to create the crosswalk according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             selected_road_seg = geometry_manager(self.geom_dict, 'boundary', ['ped_crossing', 'divider'])
         else:
@@ -574,10 +588,12 @@ class MapTransform:
             selected_road_seg = random_select_element(self.geom_dict['boundary'], times)
             
         for road_seg in selected_road_seg:
+            # Create a new crosswalk
             new_ped = self._creat_ped_polygon(road_seg['geom'])
             new_ped_dic = layer_dict_generator(new_ped, source='new')
             self.geom_dict['ped_crossing'][new_ped_dic['token']] = new_ped_dic
             
+            # link the new crosswalk to exit centerlines in the map
             self.geom_dict['ped_crossing'][new_ped_dic['token']]['centerline_token'] = []
             for cl in self.geom_dict['centerline']:
                 if cl['geom'].intersection(new_ped):
@@ -587,45 +603,22 @@ class MapTransform:
                     cl['ped_crossing_token'].append(new_ped_dic['token'])
             
     def delete_layers(self, layer_name, args):
+        """delete map layer
+
+        Args:
+            layer_name (str): name of map layer
+            args (dict): the parameters of deleting layer
+        """
         times = math.ceil(len(self.geom_dict[layer_name]) * args[1])
         if times:
             delet_ped = random_select_element(self.geom_dict[layer_name], times)
             for ped in delet_ped:
                 self.geom_dict[layer_name].pop(ped['token'])
 
-    def shift_layers(self, instance_list, correspondence_list, layer_name, args):
-        times = math.floor(self.num_layer_elements[layer_name] * args[1])
-        index_list = random.choices([i for i in range(self.num_layer_elements[layer_name])], k=times)
-        r_xy = np.random.normal(0, 1, [times, 2])
-
-        for ind in index_list:
-            rx = r_xy[ind][0]
-            ry = r_xy[ind][1]
-            geom = affinity.translate(instance_list[layer_name][ind], rx, ry)
-
-            geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-
-            if geom is None:
-                rx *= -1
-                ry *= -1
-                geom = affinity.translate(
-                    instance_list[layer_name][ind], rx, ry)
-                geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-
-                if geom is None:
-                    del instance_list[layer_name][ind]
-                    del correspondence_list[layer_name][ind]
-
-                    continue
-
-            if geom.geom_type == 'MultiLineString':
-                instance_list[layer_name][ind] = ops.linemerge(geom)
-            else:
-                instance_list[layer_name][ind] = geom
-
-        return instance_list, correspondence_list
-
     def shift_ped_crossing(self):
+        """Move the crosswalk along the center line"""
+        
+        # Select the crosswalk according to the disturbance ratio or DIY(manual selection)
         if self.tran_args.diy:
             select_peds = geometry_manager(self.geom_dict, 'ped_crossing', ['lane', 'centerline', 'boundary'])
         else:
@@ -636,13 +629,16 @@ class MapTransform:
             select_peds = random_select_element(self.geom_dict['ped_crossing'], times)
             
         for ped_cro in select_peds:
+            # Select a centerline that passes through the crosswalk
             if 'centerline_token' in ped_cro:
                 if len(ped_cro['centerline_token']):
                     along_cl_token = random.choice(ped_cro['centerline_token'])
                     along_cl = self.geom_dict['centerline'][along_cl_token]
                     if 'lane_token' in along_cl:
                         if len(along_cl['lane_token']):
+                            # Move the crosswalk forward and backward along the center line
                             moved_ped_forward, moved_ped_backward = move_polygon_along_polyline(ped_cro['geom'], along_cl['geom'], self.tran_args.shi_ped[2])
+                            # Verify that the moved crosswalk is still on the lane
                             for moved_ped in moved_ped_forward, moved_ped_backward:
                                 check = 0
                                 for l_token in along_cl['lane_token']:
@@ -657,7 +653,9 @@ class MapTransform:
                                     break
 
     def affine_transform_patch(self):
-        """affine transfor all the map elements"""
+        """affine transform for all the map geometry elements"""
+        
+        # Affine transformation parameter settings
         if self.tran_args.diy:
             rot_p = input("Enter rotate angle: ")
             rot_p = [int(float(rot_p)), [0,0]]
@@ -676,6 +674,7 @@ class MapTransform:
                 shi_p = [random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1]),
                         random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])]
         
+        # Perform an affine transformation on all map geometry layers
         for key in self.geom_dict.keys():
             if len(self.geom_dict[key]):
                 for ins_v in self.geom_dict[key].values():
@@ -689,8 +688,13 @@ class MapTransform:
                     ins_v['geom'] = ins
 
     def shift_map(self):
+        """shift vector map"""
+        
+        # shift parameter settings
         xoff = random.uniform(self.tran_args.shi_pat[2][0][0], self.tran_args.shi_pat[2][0][1])
         yoff = random.uniform(self.tran_args.shi_pat[2][1][0], self.tran_args.shi_pat[2][1][1])
+        
+        # shift each coordinate point of the vector map
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
@@ -703,7 +707,12 @@ class MapTransform:
                     self.vect_dict[layer][ind] = np.array(new_point_list)
                     
     def rotate_map(self):
+        """rotate vector map"""
+        
+        # rotate angle parameter settings
         angle = random.randint(self.tran_args.rot_pat[2][0][0], self.tran_args.rot_pat[2][0][1])
+        
+        # rotate each coordinate point of the vector map
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
@@ -717,6 +726,9 @@ class MapTransform:
                     self.vect_dict[layer][ind] = np.array(new_point_list)
     
     def flip_map(self):
+        """flip vector map by scaling with xfact ane yfact only be 1 or -1"""
+        
+        # scale each coordinate point of the vector map
         for layer, vect_list in self.vect_dict.items():
             if len(vect_list):
                 for ind, vect in enumerate(vect_list):
@@ -727,59 +739,27 @@ class MapTransform:
                         new_point_list.append([x, y])
 
                     self.vect_dict[layer][ind] = np.array(new_point_list)
-        
-    def zoom_layers(self, instance_list, correspondence_list, layer_name, args):
-        times = math.floor(self.num_layer_elements[layer_name] * args[1])
-        index_list = random.choices([i for i in range(self.num_layer_elements[layer_name])], k=times)
-
-        new_ins_list = []
-        new_cor_list = []
-        for ind, ele in enumerate(instance_list[layer_name]):
-            if ind in index_list:
-                centroid = np.array(ele.centroid.coords)
-                mv = centroid / abs(np.max(centroid)) * args[2]
-                rx = mv[0][0]
-                ry = mv[0][1]
-                geom = affinity.translate(ele, rx, ry)
-
-                geom = valid_geom(geom, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-
-                if geom is None:
-                    continue
-
-                if geom.geom_type == 'MultiLineString':
-                    new_ins_list.append(ops.linemerge(geom))
-                    new_cor_list.append(correspondence_list[layer_name][ind])
-                else:
-                    new_ins_list.append(geom)
-                    new_cor_list.append(correspondence_list[layer_name][ind])
-            else:
-                new_ins_list.append(ele)
-                new_cor_list.append(correspondence_list[layer_name][ind])
-
-        instance_list[layer_name] = new_ins_list
-        correspondence_list[layer_name] = new_cor_list
-
-        return instance_list, correspondence_list
 
     def difromate_map(self):
-        """Trigonometric warping map patches"""
-        v =0
-        h =0
-        i =0
+        """Trigonometric warping vector map"""
+        
+        ## trigonometric warping parameter settings
+        v =0 # Vertical distortion amplitude random maximum range int
+        h =0 # Horizontal distortion amplitude random maximum range int
+        i =0 # Inclination amplitude [-Max_r Max_r] int
         
         if self.tran_args.diy:
             i = float(input("Enter your inclination amplitude: "))
         else:
-            # Vertical distortion amplitude random maximum range int
             v = self.tran_args.def_pat_tri[2][0]
-            # Horizontal distortion amplitude random maximum range int
             h = self.tran_args.def_pat_tri[2][1]
-            i = self.tran_args.def_pat_tri[2][2]  # Inclination amplitude [-Max_r Max_r] int
+            i = self.tran_args.def_pat_tri[2][2]  
 
+        # xy coordinate area
         xlim = [-self.patch_box[3]/2, self.patch_box[3]/2]
         ylim = [-self.patch_box[2]/2, self.patch_box[2]/2]
 
+        # Trigonometric warping all vectors on map
         for vect_list in self.vect_dict.values():
             if len(vect_list):
                 invalide_vect_ind = []
@@ -794,12 +774,16 @@ class MapTransform:
    
     def guassian_warping(self):
         """Gaussian warping map patches"""
+        
+        # mean and standard settings
         if self.tran_args.diy:
-            # mean = float(input("Enter gaussian mean: "))
-            standard = float(input("Enter gaussian standard: "))
-            self.tran_args.def_pat_gau[2][1] = standard
+            self.tran_args.def_pat_gau[2][0] = float(input("Enter gaussian mean: "))
+            self.tran_args.def_pat_gau[2][1] = float(input("Enter gaussian standard: "))
+        
+        # get gaussian warping mesh
         g_xv, g_yv = self._gaussian_grid(self.tran_args.def_pat_gau)
 
+        # apply mesh to all vectors in map
         for key in self.vect_dict.keys():
             if len(self.vect_dict[key]):
                 new_list = []
@@ -812,10 +796,13 @@ class MapTransform:
 
     def guassian_noise(self):
         """add Gaussian noise to map patches"""
+        
+        # mean and standard settings
         if self.tran_args.diy:
-            # mean = input("Enter gaussian mean: ")
-            standard = float(input("Enter gaussian standard: "))
-            self.tran_args.noi_pat_gau[2][1] = standard
+            self.tran_args.noi_pat_gau[2][0] = input("Enter gaussian mean: ")
+            self.tran_args.noi_pat_gau[2][1] = float(input("Enter gaussian standard: "))
+        
+        # add gaussian noise mesh to vector map
         for key in self.vect_dict.keys():
             if len(self.vect_dict[key]):
                 for ind, ins in enumerate(self.vect_dict[key]):
@@ -830,6 +817,7 @@ class MapTransform:
             map_type (str): geometry or vectory
             map_name (str, optional): output name. Defaults to 'inter_pt'.
         """
+        
         if self.tran_args.truncate:
             if map_type == 'geom':
                 ## transfer geom to ready-show vectorized geom 
@@ -841,12 +829,12 @@ class MapTransform:
             elif map_type == 'vect':
                 map_vect_dic = self.vect_dict
                 
-            trans_np_dict_4_vis = np_to_geom(map_vect_dic)
-            trans_np_dict_4_vis = geom_to_np(trans_np_dict_4_vis, inter=True)
-            self.visual.vis_contours(trans_np_dict_4_vis, self.ann_name + '_truncate_' + map_name)
+            self.visual.vis_contours(map_vect_dic, self.ann_name + '_truncate_' + map_name)
             
     def perturb_vect_map(self):
         """Perturb the map vector layer: image algorithms acting on numpy arrays"""
+        
+        # tranform the map geometry layer to vector
         self.vect_dict = geom_to_np(self.geom_dict_croped, inter=True)
 
         if self.tran_args.shi_pat[0]:
@@ -910,6 +898,7 @@ class MapTransform:
         #     self.truncate_and_save('geom', '7_affine_transform_map')
         
         self.geom_dict_for_json = copy.deepcopy(self.geom_dict)
+        #Converting an overlay geometry layer to a geometry instance
         self.geom_dict = self.vector_map.gen_vectorized_samples(self.geom_dict)
         
         # crop map with a big patch box to get LineString instance from a big polygon map layer
