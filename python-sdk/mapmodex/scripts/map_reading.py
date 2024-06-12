@@ -1,3 +1,6 @@
+###     Based on data processing code from the official MapTRv2 code available under MIT License
+###     Original code can be found at https://github.com/hustvl/MapTR/blob/maptrv2/tools/maptrv2
+
 import sys
 import numpy as np
 from nuscenes.eval.common.utils import Quaternion, quaternion_yaw
