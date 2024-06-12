@@ -52,7 +52,7 @@ pt_geom_1 = {'del_lan':[1, 0.3, None], 'diy':True} #randomly delet lanes
 ```
 In DIY mode, you can select specific map layers to perturb, and you can also enter perturbance parameters.
 
-Solarized dark             |  Solarized Ocean
+Layer Selection Window             |  Step by step results
 :-------------------------:|:-------------------------:
 ![](./documents/images/diy.gif)  |  ![](./documents/images/diy_result.gif)
 ```setup
