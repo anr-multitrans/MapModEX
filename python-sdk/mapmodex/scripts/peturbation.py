@@ -525,55 +525,32 @@ class MapTransform:
     
     def adjust_boundary(self):
         """Widen or narrow the boundaries"""
-        move_distance = self.tran_args.wid_lan[2] / 2.0
+        move_distance = self.tran_args.wid_bou[2] / 2.0
         
         if self.tran_args.diy:
             # select_boundaris = geometry_manager(self.geom_dict_croped, 'boundary', ['ped_crossing', 'divider'])
             pass #TODO
         else:
-            times = math.ceil(len(self.geom_dict_croped['boundary']) * self.tran_args.wid_lan[1])
+            times = math.ceil(len(self.geom_dict_croped['boundary']) * self.tran_args.wid_bou[1])
             if times == 0:
                 return self.geom_dict_croped
             
-            index_avaliable = [str(i) for i in range(len(self.geom_dict_croped['boundary']))]
-            
-            centerline_dict = {}
-            for ind, cl in enumerate(self.geom_dict_croped['boundary']):
-                centerline_dict[str(ind)] = cl
-            
-            for _ in range(times):
-                if index_avaliable:
-                    chosen_index = random.choice(index_avaliable)
-                    index_avaliable.remove(chosen_index)
-                else:
-                    break
+            boundary_dict = {}
+            for ind, bd in enumerate(self.geom_dict_croped['boundary']):
+                bd_dic = {}
+                bd_dic['token'] = str(ind)
+                bd_dic['geom'] = bd
+                boundary_dict[str(ind)] = bd_dic
+                
+            select_boundaries = random_select_element(boundary_dict, times)
         
-                boundary = centerline_dict[chosen_index]
-                centerline_center = Point(boundary.centroid)
-                for k, polylines in self.geom_dict_croped.items():
-                    moved_polylines = []
-                    
-                    if k != 'boundary':
-                        for i, polyline in enumerate(polylines):
-                            moved_polyline = move_geom(centerline_center, polyline, move_distance)
-                            geom = valid_geom(moved_polyline, self.map_explorer, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-                            if geom:
-                                moved_polylines.append(geom)
-                    else:
-                        remove_index = []
-                        for i, polyline in enumerate(centerline_dict.values()):
-                            if str(i) in index_avaliable:
-                                moved_polyline = move_geom(centerline_center, polyline, move_distance)
-                                geom = valid_geom(moved_polyline, self.map_explorer, [0, 0, self.patch_box[2], self.patch_box[3]], 0)
-                                if geom:
-                                    moved_polylines.append(geom)
-                                else:
-                                    remove_index.append(str(i))
-                        moved_polylines.append(boundary)
-                        for id in remove_index:
-                            index_avaliable.remove(id)
+        for bd_dic in select_boundaries:
+            boundary = bd_dic['geom']
+            center = Point([0,0])
+            
+            boundary_dict[bd_dic['token']]['geom'] = move_geom(center, boundary, move_distance)
                             
-                    self.geom_dict_croped[k] = moved_polylines
+        self.geom_dict_croped['boundary'] = [geom['geom'] for geom in boundary_dict.values()]
 
     def add_ped_crossing(self):
         """Add a ped_crossing"""
