@@ -87,6 +87,50 @@ class GetMapLayerGeom(object):
         local_centerline_paths = final_centerline_paths
         return local_centerline_paths
 
+    def generate_nearby_dividers(self, ls_dict):
+        left_lane_dict = {}
+        right_lane_dict = {}
+        for key, value in ls_dict['lane'].items():
+            if not value['ls'].is_intersection:
+                if value['ls'].left_neighbor_id is not None:
+                    left_lane_dict[key] = dict(
+                        polyline=value['ls'].left_lane_boundary,
+                        predecessors=value['ls'].predecessors,
+                        successors=value['ls'].successors,
+                        left_neighbor_id=value['ls'].left_neighbor_id,
+                    )
+                    value['left_lane_divider'] = LineString(
+                        value['ls'].left_lane_boundary.xyz)
+                if value['ls'].right_neighbor_id is not None:
+                    right_lane_dict[key] = dict(
+                        polyline=value['ls'].right_lane_boundary,
+                        predecessors=value['ls'].predecessors,
+                        successors=value['ls'].successors,
+                        right_neighbor_id=value['ls'].right_neighbor_id,
+                    )
+                    value['right_lane_divider'] = LineString(
+                        value['ls'].right_lane_boundary.xyz)
+
+        for key, value in left_lane_dict.items():
+            if value['left_neighbor_id'] in right_lane_dict.keys():
+                del right_lane_dict[value['left_neighbor_id']]
+
+        for key, value in right_lane_dict.items():
+            if value['right_neighbor_id'] in left_lane_dict.keys():
+                del left_lane_dict[value['right_neighbor_id']]
+
+        for key, value in left_lane_dict.items():
+            value['centerline'] = value['polyline']
+
+        for key, value in right_lane_dict.items():
+            value['centerline'] = value['polyline']
+
+        left_paths = get_path(left_lane_dict)
+        right_paths = get_path(right_lane_dict)
+        local_divider = left_paths + right_paths
+
+        return local_divider, ls_dict
+
     def extract_local_divider(self, ls_dict):
         nearby_dividers, ls_dict = self.generate_nearby_dividers(ls_dict)
         patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
@@ -111,6 +155,7 @@ class GetMapLayerGeom(object):
                     line_dic = {}
                     line_dic['token'] = token_generator()
                     line_dic['geom'] = line
+                    line_dic['from'] = 'lane_segments'
                     line_list_dic[line_dic['token']] = line_dic
 
         ls_dict['divider'] = line_list_dic
@@ -158,6 +203,7 @@ class GetMapLayerGeom(object):
                     polygon_dic = {}
                     polygon_dic['token'] = str(pc.id)
                     polygon_dic['geom'] = new_polygon
+                    polygon_dic['from'] = 'pedestrian_crossings'
                     polygon_list_dic[str(pc.id)] = polygon_dic
 
         return polygon_list_dic
@@ -207,6 +253,7 @@ class GetMapLayerGeom(object):
                     polygon_dic = {}
                     polygon_dic['token'] = token_generator
                     polygon_dic['geom'] = polygon
+                    polygon_dic['from'] = 'drivable_areas'
                     polygon_list_dic[polygon_dic['token']] = polygon_dic
 
         return polygon_list_dic
@@ -231,12 +278,12 @@ class GetMapLayerGeom(object):
                     ls_dict[key] = value
                     ls_dict[key]['token'] = key
                     ls_dict[key]['geom'] = value['polygon']
+                    ls_dict[key]['from'] = 'lane_segments'
 
         return ls_dict
 
     def extract_local_centerline(self, ls_dict):
-        nearby_centerlines = self.generate_nearby_centerlines(
-            self.avm, ls_dict['lane'])
+        nearby_centerlines = self.generate_nearby_centerlines(ls_dict['lane'])
 
         patch = self.map_explorer.get_patch_coord(self.patch_box, self.patch_angle)
         line_list_dic = {}
@@ -262,6 +309,7 @@ class GetMapLayerGeom(object):
                     line_dic = {}
                     line_dic['token'] = token_generator()
                     line_dic['geom'] = line
+                    line_dic['from'] = 'lane_segments'
 
                     line_dic, ls_dict = get_centerline_info(line_dic, ls_dict)
 
