@@ -225,12 +225,13 @@ class RenderMap:
             for pred_label_3d in contours.keys():
                 if pred_label_3d in self.info['order'] and len(contours[pred_label_3d]):
                     for pred_pts_3d in contours[pred_label_3d]:
-                        pts_x = pred_pts_3d[:, 0]
-                        pts_y = pred_pts_3d[:, 1]
-                        plt.plot(
-                            pts_x, pts_y, color=colors_plt[pred_label_3d], linewidth=1, alpha=0.8, zorder=-1)
-                        plt.scatter(
-                            pts_x, pts_y, color=colors_plt[pred_label_3d], s=1, alpha=0.8, zorder=-1)
+                        if pred_pts_3d.size:
+                            pts_x = pred_pts_3d[:, 0]
+                            pts_y = pred_pts_3d[:, 1]
+                            plt.plot(
+                                pts_x, pts_y, color=colors_plt[pred_label_3d], linewidth=1, alpha=0.8, zorder=-1)
+                            plt.scatter(
+                                pts_x, pts_y, color=colors_plt[pred_label_3d], s=1, alpha=0.8, zorder=-1)
 
             if self.save is not None:
                 check_path(self.save)

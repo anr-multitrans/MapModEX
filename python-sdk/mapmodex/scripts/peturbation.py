@@ -213,7 +213,7 @@ class MapTransform:
                 x_res = 1-x_res
                 y_res = 1-y_res
 
-            # Get new coordinate in warped mesh
+            # Get a new coordinate in the warped mesh
             x_warp = x_anc + x_basis_x * x_res + y_basis_x * y_res
             y_warp = y_anc + x_basis_y * x_res + y_basis_y * y_res
 
@@ -793,9 +793,13 @@ class MapTransform:
 
         for key in self.vect_dict.keys():
             if len(self.vect_dict[key]):
-                for ind, ins in enumerate(self.vect_dict[key]):
-                    ins = fix_corner(ins, self.patch_box)
-                    self.vect_dict[key][ind] = self._warping(ins, g_xv, g_yv)
+                new_list = []
+                for ins in self.vect_dict[key]:
+                    if ins.size:
+                        ins = fix_corner(ins, self.patch_box)
+                        new_list.append(self._warping(ins, g_xv, g_yv))
+                
+                self.vect_dict[key] = new_list
 
     def guassian_noise(self):
         """add Gaussian noise to map patches"""

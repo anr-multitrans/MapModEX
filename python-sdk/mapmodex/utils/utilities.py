@@ -500,10 +500,10 @@ def get_index(ins_c, threshold=[None, None]):
     return indices_list
 
 def get_vect_in_patch(vect_list, patch_box=[0, 0, 60, 30]):
-    x_min = patch_box[0] - patch_box[3] / 2
-    x_max = patch_box[0] + patch_box[3] / 2
-    y_min = patch_box[1] - patch_box[2] / 2
-    y_max = patch_box[1] + patch_box[2] / 2
+    x_min = patch_box[1] - patch_box[3] / 2
+    x_max = patch_box[1] + patch_box[3] / 2
+    y_min = patch_box[0] - patch_box[2] / 2
+    y_max = patch_box[0] + patch_box[2] / 2
     xy_range = [[x_min, x_max], [y_min, y_max]]
 
     new_vect_list = []
@@ -515,8 +515,8 @@ def get_vect_in_patch(vect_list, patch_box=[0, 0, 60, 30]):
         
         # for indice in indices_list:
         #     np.delete(vect, indice)        
-        
-        new_vect_list.append(threshold_ins(vect, xy_range))
+        if vect.size:
+            new_vect_list.append(threshold_ins(vect, xy_range))
     
     return new_vect_list
 
@@ -773,21 +773,24 @@ def move_polygon_away(polygon_to_move, other_polygons, direction, step_size=0.1)
 
 
 def fix_corner(vect, patch_box):
-    x_min = patch_box[0] - patch_box[3] / 2
-    x_max = patch_box[0] + patch_box[3] / 2
-    y_min = patch_box[1] - patch_box[2] / 2
-    y_max = patch_box[1] + patch_box[2] / 2
+    x_min = patch_box[1] - patch_box[3] / 2
+    x_max = patch_box[1] + patch_box[3] / 2
+    y_min = patch_box[0] - patch_box[2] / 2
+    y_max = patch_box[0] + patch_box[2] / 2
     xy_range = [[x_min, x_max], [y_min, y_max]]
 
     return threshold_ins(vect, xy_range)
 
 def threshold_ins(vect, xy_range):
+    indices_list = []
     for dem in range(2):
         ins_c = vect[:, dem]
-        indices_list = get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
+        indices_list += get_index(ins_c, [xy_range[dem][1], xy_range[dem][0]])
     
+    indices_list = list(set(indices_list))
+    indices_list = sorted(indices_list, reverse=True)
     for indice in indices_list:
-        np.delete(vect, indice)
+        vect = np.delete(vect, indice, 0)
         
     return vect        
 
