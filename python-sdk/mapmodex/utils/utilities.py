@@ -610,15 +610,18 @@ def check_isolated_new(check_geom_dict, intersect_geom_dict_list=[], keep_inters
 
     return check_geom_dict
 
-def get_interect_info(line, line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
+def get_interect_info(line_dict, geoms_dict, layer_name, geom_new_key, line_new_key=None):
     if line_new_key is None:
         line_new_key = layer_name+'_token'
+    else:
+        line_new_key = line_new_key + '_' + layer_name + '_token'
 
     if line_new_key not in line_dict:
         line_dict[line_new_key] = []
-    for key, layer_dic in geoms_dict[layer_name].items():
-        if layer_dic['geom'].intersects(line):
-            line_dict[line_new_key].append(key)
+    
+    for layer_dic in geoms_dict[layer_name].values():
+        if line_dict['geom'].intersects(layer_dic['geom']):
+            line_dict[line_new_key].append(layer_dic['token'])
             if geom_new_key not in layer_dic:
                 layer_dic[geom_new_key] = []
             layer_dic[geom_new_key].append(line_dict['token'])
@@ -736,12 +739,10 @@ def valid_geom(geom, map_explorer, patch_box, patch_angle):
     return new_geom
 
 
-def get_centerline_info(line, centerline_dict, geoms_dict):
+def get_centerline_info(centerline_dict, geoms_dict):
 
-    centerline_dict, geoms_dict = get_interect_info(
-        line, centerline_dict, geoms_dict, 'lane', 'centerline_token')
-    centerline_dict, geoms_dict = get_interect_info(
-        line, centerline_dict, geoms_dict, 'ped_crossing', 'centerline_token')
+    centerline_dict, geoms_dict = get_interect_info(centerline_dict, geoms_dict, 'lane', 'centerline_token')
+    centerline_dict, geoms_dict = get_interect_info(centerline_dict, geoms_dict, 'ped_crossing', 'centerline_token')
 
     return centerline_dict, geoms_dict
 
@@ -792,11 +793,9 @@ def threshold_ins(vect, xy_range):
 
 def get_agent_info(geoms_dict):
     for layer_dic in geoms_dict['agent'].values():
-        layer_dic, geoms_dict = get_interect_info(
-            layer_dic['geom'], layer_dic, geoms_dict, 'lane', 'agent_token')
+        layer_dic, geoms_dict = get_interect_info(layer_dic, geoms_dict, 'lane', 'agent_token')
 
-        layer_dic, geoms_dict = get_interect_info(
-            layer_dic['ego'], layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco_lane_token')
+        layer_dic, geoms_dict = get_interect_info(layer_dic, geoms_dict, 'lane', 'agent_eco_token', 'eco')
 
     return geoms_dict
 

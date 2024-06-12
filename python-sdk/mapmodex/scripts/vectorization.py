@@ -208,8 +208,7 @@ class VectorizedMap(object):
             centerline_dict['token'] = token_generator()
             centerline_dict['geom'] = line
 
-            centerline_dict, geoms_dict = get_centerline_info(
-                line, centerline_dict, geoms_dict)
+            centerline_dict, geoms_dict = get_centerline_info(centerline_dict, geoms_dict)
 
             centerline_dics[centerline_dict['token']] = centerline_dict
 
@@ -260,9 +259,14 @@ class VectorizedMap(object):
             # if ped_dic['geom'].geom_type in ['Polygon', 'MultiPolygon']:
             if ped_dic['from'] == 'new':
                 for bon in map_ins_dict['boundary']:
-                    if bon.intersection(ped_dic['geom'].buffer(0.1)):
+                    if  bon.intersection(ped_dic['geom']):
                         ped.append(ped_dic['geom'])
                         break
+                    elif bon.intersection(ped_dic['geom'].buffer(0.1)):
+                        ped.append(ped_dic['geom'].buffer(0.1))
+                        break
+                    else:
+                        continue
                         # if_inter_divider = False
                         # for div in map_ins_dict['divider']:
                         #     if div.intersection(ped_dic['geom']):

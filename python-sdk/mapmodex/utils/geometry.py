@@ -135,7 +135,8 @@ def zoom_patch_by_layers(layer_name, num_layer_elements, tran_args, vect_dict, _
                         ins = fix_corner(ins, [0, 0, patch_box[2], patch_box[3]])
                         vect_dict[key][ind] = _warping(ins, g_xv, g_yv)
 
-def delete_duplicate_centerline(centerline_dict, lane_dict):
+def delete_duplicate_centerline(centerline_dict, geom_dict):
+    
     cl_list = [copy.deepcopy(cl_dic) for cl_dic in centerline_dict.values()]
     
     for ind, cl_dic in enumerate(cl_list):
@@ -146,11 +147,14 @@ def delete_duplicate_centerline(centerline_dict, lane_dict):
             if cl_lane_list == tem_cl_lane_list:
                 centerline_dict.pop(cl_dic['token'])
                 for lane_token in cl_dic['lane_token']:
-                    lane_dict[lane_token]['centerline_token'].remove(cl_dic['token'])
+                    geom_dict['lane'][lane_token]['centerline_token'].remove(cl_dic['token'])
+                if 'ped_crossing_token' in cl_dic:
+                    for ped_token in cl_dic['ped_crossing_token']:
+                        geom_dict['ped_crossing'][ped_token]['centerline_token'].remove(cl_dic['token'])
                 break
             next_ind += 1
             
-    return centerline_dict, lane_dict
+    return centerline_dict, geom_dict
 
 def remove_polyline_overlap(line):
     """

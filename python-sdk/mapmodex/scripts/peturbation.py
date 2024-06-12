@@ -595,7 +595,15 @@ class MapTransform:
         for road_seg in selected_road_seg:
             new_ped = self._creat_ped_polygon(road_seg['geom'])
             new_ped_dic = layer_dict_generator(new_ped, source='new')
-            self.geom_dict['ped_crossing'][new_ped_dic['token']] = new_ped_dic #new centerline
+            self.geom_dict['ped_crossing'][new_ped_dic['token']] = new_ped_dic
+            
+            self.geom_dict['ped_crossing'][new_ped_dic['token']]['centerline_token'] = []
+            for cl in self.geom_dict['centerline']:
+                if cl['geom'].intersection(new_ped):
+                    self.geom_dict['ped_crossing'][new_ped_dic['token']]['centerline_token'].append(cl['token'])
+                    if 'ped_crossing_token' not in cl:
+                        cl['ped_crossing_token'] = []
+                    cl['ped_crossing_token'].append(new_ped_dic['token'])
             
     def delete_layers(self, layer_name, args):
         times = math.ceil(len(self.geom_dict[layer_name]) * args[1])
@@ -640,20 +648,20 @@ class MapTransform:
 
     def shift_ped_crossing(self):
         if self.tran_args.diy:
-            celected_geoms = geometry_manager(self.geom_dict, 'ped_crossing', ['lane', 'centerline', 'boundary'])
+            select_peds = geometry_manager(self.geom_dict, 'ped_crossing', ['lane', 'centerline', 'boundary'])
         else:
             times = math.ceil(len(self.geom_dict['ped_crossing'].keys()) * self.tran_args.shi_ped[1])
             if times == 0:
                 return self.geom_dict
 
-            celected_geoms = random_select_element(self.geom_dict['ped_crossing'], times)
+            select_peds = random_select_element(self.geom_dict['ped_crossing'], times)
             
-        for ped_cro in celected_geoms:
-            if ped_cro['geom'].geom_type == 'MultiPolygon':
-                ped_cro['geom'] = unary_union(ped_cro['geom'])
-                if ped_cro['geom'].geom_type == 'MultiPolygon':
-                    print('ped_crossing is MultiPolygon and the shift is failed')
-                    continue
+        for ped_cro in select_peds:
+            # if ped_cro['geom'].geom_type == 'MultiPolygon':
+            #     ped_cro['geom'] = unary_union(ped_cro['geom'])
+            #     if ped_cro['geom'].geom_type == 'MultiPolygon':
+            #         print('ped_crossing is MultiPolygon and the shift is failed')
+            #         continue
             
             if 'centerline_token' in ped_cro:
                 if len(ped_cro['centerline_token']):
@@ -666,11 +674,13 @@ class MapTransform:
                                 check = 0
                                 for l_token in along_cl['lane_token']:
                                     lane = self.geom_dict['lane'][l_token]
-                                    if moved_ped.intersects(lane['geom']):
+                                    if moved_ped.intersection(lane['geom']):
                                         check = 1
                                         break
+                                
                                 if check:
                                     self.geom_dict['ped_crossing'][ped_cro['token']]['geom'] = moved_ped
+                                    self.geom_dict['ped_crossing'][ped_cro['token']]['from'] = 'new'
                                     break
 
     def affine_transform_patch(self):
